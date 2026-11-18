@@ -1,0 +1,4 @@
+# Viewer (Mac). Install into the repository's virtual environment: .venv/bin/pip install -r viewer/requirements.txt
+viser==1.1.1
+numpy==2.5.5
+trimesh==5.2.1

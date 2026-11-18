@@ -1,0 +1,10 @@
+# d435_capture configuration (key = value). Command-line options override these values.
+# Serial numbers of the two cameras (same format as rs_investigation/cams.conf).
+A=234322070408
+B=234322070144
+# Optional defaults:
+# sink = shm                 # shm | stats
+# shm_name = /d435_pairs
+# status_interval = 10
+# pair_csv = pairs.csv
+# hist_out = latency_histograms.csv

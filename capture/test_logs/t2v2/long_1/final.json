@@ -1,0 +1,10 @@
+{
+  "run_s": 2700.040,
+  "sink": "shm",
+  "sink_pairs": 242178,
+  "A": {"serial": "234322070408", "frames": 242652, "dropped": 0, "overflows": 0, "max_fill": 3, "ignored": 0, "after_stop": 0, "short_frames": 0, "callback_errors": 0, "cb_p50_ms": 0.2200, "cb_p99_ms": 0.3600, "cb_max_ms": 1.9243, "lat_p50_ms": 9.60, "lat_p99_ms": 10.80, "restarts": 0, "restart_failures": 0, "fps_warnings": 0, "period_ms": 11.128325, "eligible": 242197, "paired": 242178, "unpaired": 19, "settle_discards": 450, "domain_discards": 0, "partner_settling_discards": 5, "restart_discards": 0, "timeout_decisions": 0, "period_fallback": 0, "recoveries": 0, "full_opens": 0, "state": "ok"},
+  "B": {"serial": "234322070144", "frames": 242646, "dropped": 0, "overflows": 0, "max_fill": 2, "ignored": 0, "after_stop": 17, "short_frames": 0, "callback_errors": 0, "cb_p50_ms": 0.2300, "cb_p99_ms": 0.3700, "cb_max_ms": 1.8376, "lat_p50_ms": 9.60, "lat_p99_ms": 10.80, "restarts": 0, "restart_failures": 0, "fps_warnings": 0, "period_ms": 11.128325, "eligible": 242196, "paired": 242178, "unpaired": 18, "settle_discards": 450, "domain_discards": 0, "partner_settling_discards": 0, "restart_discards": 0, "timeout_decisions": 0, "period_fallback": 0, "recoveries": 0, "full_opens": 0, "state": "ok"},
+  "output_delay": {"usual": {"pairs": 218990, "older_p50_ms": 12.10, "older_p99_ms": 15.00, "older_max_ms": 21.40, "newer_p50_ms": 9.80, "newer_p99_ms": 11.10, "newer_max_ms": 20.70}, "near_half": {"pairs": 23188, "older_p50_ms": 20.80, "older_p99_ms": 21.80, "older_max_ms": 23.50, "newer_p50_ms": 15.50, "newer_p99_ms": 16.50, "newer_max_ms": 18.30}},
+  "process": {"rss_kb_end": 46240, "rss_kb_after_first_recovery": 0, "hw_resets_requested": 0, "hw_reset_failures": 0, "hw_recovery_timeouts": 0},
+  "matcher": {"pairs": 242178, "partner_changes": 35, "dt_min_ms": -5.5640, "dt_median_ms": -0.750, "dt_max_ms": 5.5635, "period_ms": 11.128325, "tolerance_ms": 5.564163, "order_errors": 0, "csv_overflows": 0}
+}

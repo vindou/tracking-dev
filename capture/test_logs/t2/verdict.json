@@ -1,0 +1,3511 @@
+{
+ "baseline": {
+  "runs": [
+   {
+    "values": {
+     "run": "baseline_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.045,
+     "pairs": 4941,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -1.1924,
+     "dt_max_ms": -0.2249,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.4,
+      "cb_max_ms": 1.1795,
+      "lat_p50_ms": 10.0,
+      "lat_p99_ms": 11.2,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.883
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.41,
+      "cb_max_ms": 1.4569,
+      "lat_p50_ms": 10.2,
+      "lat_p99_ms": 11.5,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 49,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.783
+     },
+     "csv": {
+      "pairs": 4941,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 1.1924,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.9,
+      "tj_max": 43.375
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.400 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.410 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -1.1924, max -0.2249)",
+      true
+     ],
+     [
+      "csv: 4941 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "baseline_2",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.076,
+     "pairs": 4943,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -3.4336,
+     "dt_max_ms": -2.0574,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5399,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.6512,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 4943,
+      "paired": 4943,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.869
+     },
+     "B": {
+      "frames": 5393,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.4243,
+      "lat_p50_ms": 9.1,
+      "lat_p99_ms": 10.6,
+      "fps_warnings": 0,
+      "eligible": 4943,
+      "paired": 4943,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 55,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.77
+     },
+     "csv": {
+      "pairs": 4943,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 3.4336,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 9.7,
+      "tj_max": 43.125
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.300 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.290 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -3.4336, max -2.0574)",
+      true
+     ],
+     [
+      "csv: 4943 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "baseline_3",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.039,
+     "pairs": 4939,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 1.1785,
+     "dt_max_ms": 2.4763,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5396,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.46,
+      "cb_max_ms": 0.5612,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 4939,
+      "paired": 4939,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.875
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.9553,
+      "lat_p50_ms": 9.8,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 4940,
+      "paired": 4939,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 63,
+      "timeout_decisions": 0,
+      "paired_pct": 99.98,
+      "fps": 89.792
+     },
+     "csv": {
+      "pairs": 4939,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 2.4763,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 10.1,
+      "tj_max": 42.968
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.460 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.98%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.290 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min 1.1785, max 2.4763)",
+      true
+     ],
+     [
+      "csv: 4939 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "long": {
+  "runs": [
+   {
+    "values": {
+     "run": "long_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 2700.058,
+     "pairs": 242188,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -5.5635,
+     "dt_max_ms": 5.5637,
+     "partner_changes": 19,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 242654,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 10,
+      "cb_p99_ms": 0.37,
+      "cb_max_ms": 2.0799,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 242198,
+      "paired": 242188,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 99.996,
+      "fps": 89.87
+     },
+     "B": {
+      "frames": 242648,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 10,
+      "cb_p99_ms": 0.37,
+      "cb_max_ms": 1.9089,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 242198,
+      "paired": 242188,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 82,
+      "timeout_decisions": 0,
+      "paired_pct": 99.996,
+      "fps": 89.868
+     },
+     "csv": {
+      "pairs": 242188,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 5.5637,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 8.9,
+      "tj_max": 43.906
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (99.996%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.370 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.996%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.370 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -5.5635, max 5.5637)",
+      true
+     ],
+     [
+      "csv: 242188 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "memload": {
+  "runs": [
+   {
+    "values": {
+     "run": "memload_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.057,
+     "pairs": 4942,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 1.0215,
+     "dt_max_ms": 2.0161,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 2.19,
+      "cb_max_ms": 20.4278,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 12.3,
+      "fps_warnings": 0,
+      "eligible": 4942,
+      "paired": 4942,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.865
+     },
+     "B": {
+      "frames": 5392,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.74,
+      "cb_max_ms": 1.4755,
+      "lat_p50_ms": 9.1,
+      "lat_p99_ms": 10.0,
+      "fps_warnings": 0,
+      "eligible": 4942,
+      "paired": 4942,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 30,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.781
+     },
+     "csv": {
+      "pairs": 4942,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 2.0161,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 72.5,
+      "tj_max": 50.531
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no crash; 124 would be a timeout/deadlock)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "all dt within tolerance",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "memload_2",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.055,
+     "pairs": 4940,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 1.3462,
+     "dt_max_ms": 2.0452,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.35,
+      "cb_max_ms": 2.6404,
+      "lat_p50_ms": 9.1,
+      "lat_p99_ms": 9.6,
+      "fps_warnings": 0,
+      "eligible": 4940,
+      "paired": 4940,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.868
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.74,
+      "cb_max_ms": 3.2849,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 11.4,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4940,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 35,
+      "timeout_decisions": 0,
+      "paired_pct": 99.98,
+      "fps": 89.768
+     },
+     "csv": {
+      "pairs": 4940,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 2.0452,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 72.3,
+      "tj_max": 52.937
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no crash; 124 would be a timeout/deadlock)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "all dt within tolerance",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "memload_3",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.053,
+     "pairs": 4941,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -3.5881,
+     "dt_max_ms": -2.8745,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.96,
+      "cb_max_ms": 9.3469,
+      "lat_p50_ms": 9.1,
+      "lat_p99_ms": 9.8,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.871
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.37,
+      "cb_max_ms": 1.4958,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 10.2,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 39,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.771
+     },
+     "csv": {
+      "pairs": 4941,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 3.5881,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 72.3,
+      "tj_max": 53.937
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no crash; 124 would be a timeout/deadlock)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "all dt within tolerance",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "reader": {
+  "runs": [
+   {
+    "values": {
+     "run": "reader_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.077,
+     "pairs": 4941,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -5.5618,
+     "dt_max_ms": 5.5571,
+     "partner_changes": 3,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5399,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 2,
+      "cb_p99_ms": 0.33,
+      "cb_max_ms": 0.7407,
+      "lat_p50_ms": 9.3,
+      "lat_p99_ms": 10.2,
+      "fps_warnings": 0,
+      "eligible": 4943,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 99.96,
+      "fps": 89.868
+     },
+     "B": {
+      "frames": 5394,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 2,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 1.7229,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 4943,
+      "paired": 4941,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 53,
+      "timeout_decisions": 0,
+      "paired_pct": 99.96,
+      "fps": 89.785
+     },
+     "csv": {
+      "pairs": 4941,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 5.5618,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.2,
+      "tj_max": 43.156
+     },
+     "reader": {
+      "received": 4941,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4940,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (99.96%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.330 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.96%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.320 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -5.5618, max 5.5571)",
+      true
+     ],
+     [
+      "csv: 4941 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4941 of 4941)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "reader_2",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.044,
+     "pairs": 4940,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -4.2651,
+     "dt_max_ms": -2.9102,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5396,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.33,
+      "cb_max_ms": 2.0797,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 4940,
+      "paired": 4940,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.867
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.34,
+      "cb_max_ms": 0.4473,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 4940,
+      "paired": 4940,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 64,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.784
+     },
+     "csv": {
+      "pairs": 4940,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 4.2651,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.3,
+      "tj_max": 43.281
+     },
+     "reader": {
+      "received": 4940,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4939,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.330 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.340 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -4.2651, max -2.9102)",
+      true
+     ],
+     [
+      "csv: 4940 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4940 of 4940)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "reader_3",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.051,
+     "pairs": 4940,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 3.7568,
+     "dt_max_ms": 5.1794,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.33,
+      "cb_max_ms": 1.718,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 4940,
+      "paired": 4940,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.874
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 0.5517,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4940,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 61,
+      "timeout_decisions": 0,
+      "paired_pct": 99.98,
+      "fps": 89.774
+     },
+     "csv": {
+      "pairs": 4940,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 5.1794,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.2,
+      "tj_max": 43.406
+     },
+     "reader": {
+      "received": 4940,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4939,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.330 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.98%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.320 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min 3.7568, max 5.1794)",
+      true
+     ],
+     [
+      "csv: 4940 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4940 of 4940)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "reader_stopped": {
+  "runs": [
+   {
+    "values": {
+     "run": "reader_stopped_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.057,
+     "pairs": 4941,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -0.2708,
+     "dt_max_ms": 2.3828,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5397,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.36,
+      "cb_max_ms": 0.9492,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 11.1,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.865
+     },
+     "B": {
+      "frames": 5392,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.7002,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 4942,
+      "paired": 4941,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 55,
+      "timeout_decisions": 0,
+      "paired_pct": 99.98,
+      "fps": 89.781
+     },
+     "csv": {
+      "pairs": 4941,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 2.3828,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 10.3,
+      "tj_max": 43.468
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.360 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.98%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.310 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -0.2708, max 2.3828)",
+      true
+     ],
+     [
+      "csv: 4941 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader was stopped (SIGSTOP) during the run",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "startstop": {
+  "runs": [
+   {
+    "values": {
+     "run": "startstop_01",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 4.4453,
+     "dt_max_ms": 4.6624,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 0.3675,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.837
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.3558,
+      "lat_p50_ms": 9.3,
+      "lat_p99_ms": 10.4,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 47,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.1,
+      "tj_max": 52.468
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_02",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.011,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 4.9023,
+     "dt_max_ms": 5.3264,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.27,
+      "cb_max_ms": 1.0017,
+      "lat_p50_ms": 9.9,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.901
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 0.3046,
+      "lat_p50_ms": 10.0,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 55,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.302
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.0,
+      "tj_max": 50.687
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_03",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.006,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -2.8193,
+     "dt_max_ms": -2.637,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128326,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 1.3826,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.946
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 0.4688,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 14.9,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 45,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.346
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 14.6,
+      "tj_max": 49.25
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_04",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.015,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -4.0339,
+     "dt_max_ms": -3.3877,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.3526,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 10.2,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.865
+     },
+     "B": {
+      "frames": 895,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.3907,
+      "lat_p50_ms": 8.7,
+      "lat_p99_ms": 11.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 47,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.366
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 12.6,
+      "tj_max": 48.406
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (900/895)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_05",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.009,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 3.6809,
+     "dt_max_ms": 3.7456,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.5129,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.2,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.919
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.3723,
+      "lat_p50_ms": 10.2,
+      "lat_p99_ms": 11.3,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 49,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.32
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.6,
+      "tj_max": 47.625
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_06",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.013,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 3.074,
+     "dt_max_ms": 5.2429,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.3922,
+      "lat_p50_ms": 8.7,
+      "lat_p99_ms": 9.8,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.883
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.3616,
+      "lat_p50_ms": 8.4,
+      "lat_p99_ms": 10.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 56,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.284
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.2,
+      "tj_max": 47.218
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_07",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.015,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 5.4314,
+     "dt_max_ms": 5.5461,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.508,
+      "lat_p50_ms": 9.4,
+      "lat_p99_ms": 10.5,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 1,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.865
+     },
+     "B": {
+      "frames": 895,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.4608,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.6,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 48,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.366
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.3,
+      "tj_max": 46.5
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/895)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_08",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.006,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -3.1814,
+     "dt_max_ms": -2.531,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 1.013,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.5,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.846
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.649,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 15.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 54,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.346
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.3,
+      "tj_max": 46.031
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_09",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -1.3918,
+     "dt_max_ms": -1.196,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 0.521,
+      "lat_p50_ms": 9.9,
+      "lat_p99_ms": 11.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.937
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.36,
+      "cb_max_ms": 0.7784,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 44,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 14.5,
+      "tj_max": 45.718
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_10",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.009,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 3.519,
+     "dt_max_ms": 4.1443,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.4142,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.6,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.919
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.4031,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 44,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.32
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 14.1,
+      "tj_max": 45.343
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_11",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -0.8867,
+     "dt_max_ms": -0.5549,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.39,
+      "cb_max_ms": 0.4275,
+      "lat_p50_ms": 9.8,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.937
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.39,
+      "cb_max_ms": 0.7452,
+      "lat_p50_ms": 10.0,
+      "lat_p99_ms": 11.7,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 57,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.6,
+      "tj_max": 45.093
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_12",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.01,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 0.0054,
+     "dt_max_ms": 0.8223,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.36,
+      "cb_max_ms": 0.4182,
+      "lat_p50_ms": 9.3,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.91
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.9011,
+      "lat_p50_ms": 10.2,
+      "lat_p99_ms": 14.9,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 36,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.311
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 15.4,
+      "tj_max": 45.218
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_13",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 4.3469,
+     "dt_max_ms": 4.55,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 1.0966,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.837
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 0.3003,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 15.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 56,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.1,
+      "tj_max": 44.937
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_14",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.012,
+     "pairs": 443,
+     "tolerance_ms": 5.564162,
+     "dt_min_ms": -5.5576,
+     "dt_max_ms": 5.5625,
+     "partner_changes": 2,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.3765,
+      "lat_p50_ms": 9.0,
+      "lat_p99_ms": 10.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128323,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 1,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.792
+     },
+     "B": {
+      "frames": 895,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.4092,
+      "lat_p50_ms": 9.9,
+      "lat_p99_ms": 11.4,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 54,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.393
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.4,
+      "tj_max": 44.625
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (899/895)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_15",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.006,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 4.3079,
+     "dt_max_ms": 4.8384,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.3429,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.2,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.846
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 0.3854,
+      "lat_p50_ms": 9.4,
+      "lat_p99_ms": 15.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 48,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.346
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 12.9,
+      "tj_max": 44.718
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_16",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.014,
+     "pairs": 443,
+     "tolerance_ms": 5.564162,
+     "dt_min_ms": 4.3022,
+     "dt_max_ms": 5.4775,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.28,
+      "cb_max_ms": 0.8618,
+      "lat_p50_ms": 9.3,
+      "lat_p99_ms": 10.4,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128323,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.874
+     },
+     "B": {
+      "frames": 895,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.31,
+      "cb_max_ms": 0.4176,
+      "lat_p50_ms": 9.2,
+      "lat_p99_ms": 10.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 49,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.375
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 12.7,
+      "tj_max": 44.468
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/895)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_17",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -1.1294,
+     "dt_max_ms": -0.6345,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 1.0654,
+      "lat_p50_ms": 9.8,
+      "lat_p99_ms": 11.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.937
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.42,
+      "cb_max_ms": 1.4214,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 11.4,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 58,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.9,
+      "tj_max": 44.187
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_18",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.014,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -5.5532,
+     "dt_max_ms": 5.5522,
+     "partner_changes": 1,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 900,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.29,
+      "cb_max_ms": 1.4925,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.6,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.874
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 0.7597,
+      "lat_p50_ms": 9.0,
+      "lat_p99_ms": 10.1,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 47,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.275
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.1,
+      "tj_max": 44.156
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (900/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_19",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.008,
+     "pairs": 444,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -2.1853,
+     "dt_max_ms": -0.9316,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 1.2913,
+      "lat_p50_ms": 9.9,
+      "lat_p99_ms": 11.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.828
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.35,
+      "cb_max_ms": 0.3954,
+      "lat_p50_ms": 9.9,
+      "lat_p99_ms": 11.6,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 444,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 48,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.329
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 13.5,
+      "tj_max": 44.031
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (444)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "startstop_20",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 10.007,
+     "pairs": 443,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 0.908,
+     "dt_max_ms": 2.2607,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 899,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.48,
+      "cb_max_ms": 1.1956,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 10.8,
+      "fps_warnings": 0,
+      "eligible": 443,
+      "paired": 443,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.837
+     },
+     "B": {
+      "frames": 894,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 1,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 1.5425,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 14.0,
+      "fps_warnings": 0,
+      "eligible": 444,
+      "paired": 443,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 46,
+      "timeout_decisions": 0,
+      "paired_pct": 99.775,
+      "fps": 89.337
+     },
+     "csv": null,
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 14.9,
+      "tj_max": 43.781
+     }
+    },
+    "checks": [
+     [
+      "exit code 0 (no stall: finished within the timeout)",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "pairs supplied (443)",
+      true
+     ],
+     [
+      "frames from both cameras (899/894)",
+      true
+     ],
+     [
+      "no camera restart (stall) (0/0)",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "watchdog": {
+  "runs": [
+   {
+    "values": {
+     "run": "watchdog_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.053,
+     "pairs": 4401,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": 0.5022,
+     "dt_max_ms": 4.7285,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5307,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 1,
+      "unpaired": 0,
+      "cb_p99_ms": 0.42,
+      "cb_max_ms": 0.5769,
+      "lat_p50_ms": 9.6,
+      "lat_p99_ms": 11.8,
+      "fps_warnings": 0,
+      "eligible": 4401,
+      "paired": 4401,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 42,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 88.372
+     },
+     "B": {
+      "frames": 5392,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 4,
+      "restarts": 0,
+      "unpaired": 88,
+      "cb_p99_ms": 0.3,
+      "cb_max_ms": 1.5312,
+      "lat_p50_ms": 9.4,
+      "lat_p99_ms": 10.9,
+      "fps_warnings": 0,
+      "eligible": 4489,
+      "paired": 4401,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 24,
+      "timeout_decisions": 87,
+      "paired_pct": 98.04,
+      "fps": 89.787
+     },
+     "csv": {
+      "pairs": 4401,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 4.7285,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 1
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 10.0,
+      "tj_max": 44.125
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "camera A restarted (1)",
+      true
+     ],
+     [
+      "camera B not restarted (0)",
+      true
+     ],
+     [
+      "frames ignored by the test option (42)",
+      true
+     ],
+     [
+      "pairs continue after the restart (3060)",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ }
+}

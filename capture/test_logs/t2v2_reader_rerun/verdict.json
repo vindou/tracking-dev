@@ -1,0 +1,574 @@
+{
+ "reader": {
+  "runs": [
+   {
+    "values": {
+     "run": "reader_1",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.075,
+     "pairs": 4939,
+     "tolerance_ms": 5.564162,
+     "dt_min_ms": -5.5637,
+     "dt_max_ms": 5.5635,
+     "partner_changes": 7,
+     "order_errors": 0,
+     "period_ms": 11.128324,
+     "A": {
+      "frames": 5399,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 4,
+      "restarts": 0,
+      "unpaired": 5,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 0.3799,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 4944,
+      "paired": 4939,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 99.899,
+      "fps": 89.871
+     },
+     "B": {
+      "frames": 5394,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 2,
+      "restarts": 0,
+      "unpaired": 4,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 1.7857,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.7,
+      "fps_warnings": 0,
+      "eligible": 4943,
+      "paired": 4939,
+      "period_ms": 11.128323,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 60,
+      "timeout_decisions": 0,
+      "paired_pct": 99.919,
+      "fps": 89.788
+     },
+     "csv": {
+      "pairs": 4939,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 5.5637,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.3,
+      "tj_max": 45.343
+     },
+     "reader": {
+      "attaches": 1,
+      "received": 4939,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4938,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true,
+      "end": "writer_stopped",
+      "instances": [
+       {
+        "instance_id": "af99a3bac33f79c6",
+        "writer_pid": 79070,
+        "writer_start_real_ns": 1700667842152563552,
+        "attach_real_ns": 1700667842157324992,
+        "start_seq": 0,
+        "received": 4939,
+        "first_seq": 0,
+        "last_seq": 4938,
+        "missing": 0,
+        "seq_gaps": 0,
+        "discarded_reads": 0,
+        "first_recv_real_ns": 1700667847233724992,
+        "first_publish_real_ns": 1700667847231322912,
+        "end": "writer_stopped",
+        "end_real_ns": 1700667903931745248,
+        "end_heartbeat_age_ms": 10.2
+       }
+      ]
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (99.899%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.320 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (99.919%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.320 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -5.5637, max 5.5635)",
+      true
+     ],
+     [
+      "csv: 4939 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4939 of 4939)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "reader_2",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.043,
+     "pairs": 4941,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -1.2854,
+     "dt_max_ms": -0.0193,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5396,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 3,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.43,
+      "cb_max_ms": 0.9253,
+      "lat_p50_ms": 10.1,
+      "lat_p99_ms": 11.3,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.869
+     },
+     "B": {
+      "frames": 5391,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.42,
+      "cb_max_ms": 1.2279,
+      "lat_p50_ms": 10.4,
+      "lat_p99_ms": 11.5,
+      "fps_warnings": 0,
+      "eligible": 4941,
+      "paired": 4941,
+      "period_ms": 11.128326,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 56,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.786
+     },
+     "csv": {
+      "pairs": 4941,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 1.2854,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 12.8,
+      "tj_max": 45.75
+     },
+     "reader": {
+      "attaches": 1,
+      "received": 4941,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4940,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true,
+      "end": "writer_stopped",
+      "instances": [
+       {
+        "instance_id": "2c3140c0fd09c602",
+        "writer_pid": 79301,
+        "writer_start_real_ns": 1700667907440958176,
+        "attach_real_ns": 1700667907514081152,
+        "start_seq": 0,
+        "received": 4941,
+        "first_seq": 0,
+        "last_seq": 4940,
+        "missing": 0,
+        "seq_gaps": 0,
+        "discarded_reads": 0,
+        "first_recv_real_ns": 1700667912515776608,
+        "first_publish_real_ns": 1700667912513471872,
+        "end": "writer_stopped",
+        "end_real_ns": 1700667969203181472,
+        "end_heartbeat_age_ms": 34.2
+       }
+      ]
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.430 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.420 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -1.2854, max -0.0193)",
+      true
+     ],
+     [
+      "csv: 4941 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4941 of 4941)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   },
+   {
+    "values": {
+     "run": "reader_3",
+     "rc": 0,
+     "shm_left": 0,
+     "own_processes_left": 0,
+     "final": true,
+     "run_s": 60.079,
+     "pairs": 4944,
+     "tolerance_ms": 5.564163,
+     "dt_min_ms": -4.7703,
+     "dt_max_ms": -4.0095,
+     "partner_changes": 0,
+     "order_errors": 0,
+     "period_ms": 11.128325,
+     "A": {
+      "frames": 5400,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 4,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.32,
+      "cb_max_ms": 0.5915,
+      "lat_p50_ms": 9.5,
+      "lat_p99_ms": 10.4,
+      "fps_warnings": 0,
+      "eligible": 4944,
+      "paired": 4944,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 0,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.882
+     },
+     "B": {
+      "frames": 5394,
+      "dropped": 0,
+      "overflows": 0,
+      "max_fill": 1,
+      "restarts": 0,
+      "unpaired": 0,
+      "cb_p99_ms": 0.34,
+      "cb_max_ms": 1.6206,
+      "lat_p50_ms": 9.7,
+      "lat_p99_ms": 10.5,
+      "fps_warnings": 0,
+      "eligible": 4944,
+      "paired": 4944,
+      "period_ms": 11.128325,
+      "callback_errors": 0,
+      "ignored": 0,
+      "after_stop": 48,
+      "timeout_decisions": 0,
+      "paired_pct": 100.0,
+      "fps": 89.782
+     },
+     "csv": {
+      "pairs": 4944,
+      "over_tolerance": 0,
+      "max_abs_dt_ms": 4.7703,
+      "seq_errors": 0,
+      "time_order_errors": 0,
+      "counter_restarts": 0
+     },
+     "kernel_relevant": [],
+     "tegra": {
+      "cpu_mean": 11.1,
+      "tj_max": 45.875
+     },
+     "reader": {
+      "attaches": 1,
+      "received": 4944,
+      "start_seq": 0,
+      "first_seq": 0,
+      "last_seq": 4943,
+      "missing": 0,
+      "seq_gaps": 0,
+      "discarded_reads": 0,
+      "writer_stopped": true,
+      "end": "writer_stopped",
+      "instances": [
+       {
+        "instance_id": "5a4a449ea7498a6b",
+        "writer_pid": 79530,
+        "writer_start_real_ns": 1700667973162947520,
+        "attach_real_ns": 1700667973193018560,
+        "start_seq": 0,
+        "received": 4944,
+        "first_seq": 0,
+        "last_seq": 4943,
+        "missing": 0,
+        "seq_gaps": 0,
+        "discarded_reads": 0,
+        "first_recv_real_ns": 1700667978243430976,
+        "first_publish_real_ns": 1700667978241045888,
+        "end": "writer_stopped",
+        "end_real_ns": 1700668034917391360,
+        "end_heartbeat_age_ms": 32.7
+       }
+      ]
+     }
+    },
+    "checks": [
+     [
+      "exit code 0",
+      true
+     ],
+     [
+      "final counters written",
+      true
+     ],
+     [
+      "A dropped == 0 (0)",
+      true
+     ],
+     [
+      "A overflows == 0 (0)",
+      true
+     ],
+     [
+      "A restarts == 0 (0)",
+      true
+     ],
+     [
+      "A paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "A callback p99 < 0.5 ms (0.320 ms)",
+      true
+     ],
+     [
+      "B dropped == 0 (0)",
+      true
+     ],
+     [
+      "B overflows == 0 (0)",
+      true
+     ],
+     [
+      "B restarts == 0 (0)",
+      true
+     ],
+     [
+      "B paired >= 99% of eligible (100.0%)",
+      true
+     ],
+     [
+      "B callback p99 < 0.5 ms (0.340 ms)",
+      true
+     ],
+     [
+      "all dt within +-5.5642 ms (min -4.7703, max -4.0095)",
+      true
+     ],
+     [
+      "csv: 4944 pairs, 0 over tolerance, 0 seq/order errors, no frame reused",
+      true
+     ],
+     [
+      "order_errors == 0 (0)",
+      true
+     ],
+     [
+      "shared memory removed",
+      true
+     ],
+     [
+      "reader result written",
+      true
+     ],
+     [
+      "reader missing == 0 (0), seq gaps == 0 (0)",
+      true
+     ],
+     [
+      "reader received all pairs after attach (4944 of 4944)",
+      true
+     ],
+     [
+      "reader saw writer stop",
+      true
+     ]
+    ],
+    "pass": true
+   }
+  ],
+  "pass": true
+ }
+}

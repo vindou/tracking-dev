@@ -1,0 +1,9 @@
+camera A: 370894 points; depth histogram (0-0.3-0.5-0.7-1-1.5-2-3-5 m): [0, 5594, 34641, 27585, 48073, 134920, 120081, 0]
+camera B: 257198 points; depth histogram (0-0.3-0.5-0.7-1-1.5-2-3-5 m): [2826, 238, 749, 9, 5, 2812, 223449, 27047]
+points in the work volume: camera A 6215, camera B 3813
+scene agreement under camera-frame assumptions (camera A points within 3 cm of camera B points):
+   nominal :   5.5 %, median distance    341 mm
+   rz180   :   0.0 %, median distance   1060 mm
+   rx180   :   0.0 %, median distance   1044 mm
+   ry180   :   0.0 %, median distance   1609 mm
+(a name swap rotates both clouds together and does not change the agreement)

@@ -1,0 +1,28 @@
+{
+ "source": "test_object.step",
+ "triangles": 74,
+ "vertices": 39,
+ "closed_surface": true,
+ "winding_consistent": true,
+ "size_mm": [
+  102.5,
+  92.5,
+  67.845
+ ],
+ "bounds_m": [
+  [
+   -0.01899999938905239,
+   -0.027499999850988388,
+   0.0
+  ],
+  [
+   0.08349999785423279,
+   0.06499999761581421,
+   0.0678449496626854
+  ]
+ ],
+ "volume_m3": 0.00035641039179739264,
+ "area_m2": 0.03134888834941593,
+ "model_points": 3000,
+ "normals_point_out": true
+}

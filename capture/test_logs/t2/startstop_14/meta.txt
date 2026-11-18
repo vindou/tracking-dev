@@ -1,0 +1,24 @@
+start_uptime_s=20041.97
+usb:
+  /:  Bus 02.Port 1: Dev 1, Class=root_hub, Driver=tegra-xusb/4p, 10000M
+      |__ Port 1: Dev 2, If 0, Class=Hub, Driver=hub/4p, 10000M
+          |__ Port 1: Dev 3, If 5, Class=Human Interface Device, Driver=usbhid, 5000M
+          |__ Port 1: Dev 3, If 3, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 1: Dev 3, If 1, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 1: Dev 3, If 4, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 1: Dev 3, If 2, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 1: Dev 3, If 0, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 0, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 1, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 2, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 3, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 4, Class=Video, Driver=uvcvideo, 5000M
+          |__ Port 3: Dev 4, If 5, Class=Human Interface Device, Driver=usbhid, 5000M
+  /:  Bus 01.Port 1: Dev 1, Class=root_hub, Driver=tegra-xusb/4p, 480M
+      |__ Port 2: Dev 2, If 0, Class=Hub, Driver=hub/4p, 480M
+      |__ Port 3: Dev 3, If 0, Class=Wireless, Driver=rtk_btusb, 12M
+      |__ Port 3: Dev 3, If 1, Class=Wireless, Driver=rtk_btusb, 12M
+capture_rc=0
+end_uptime_s=20058.42
+shm_left=0
+own_processes_left=0

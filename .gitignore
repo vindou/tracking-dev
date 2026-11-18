@@ -66,3 +66,15 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# tracker: Python virtual environment and third-party downloads
+.venv/
+third_party_src/
+
+# viewer outputs
+viewer/poses.csv
+viewer/demo_logs/
+
+# OS and Python caches
+.DS_Store
+__pycache__/
