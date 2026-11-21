@@ -78,3 +78,7 @@ viewer/demo_logs/
 # OS and Python caches
 .DS_Store
 __pycache__/
+
+# flow module: generated data, training runs
+flow/data/
+flow/runs/

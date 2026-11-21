@@ -1,0 +1,12 @@
+digraph G { rankdir=LR; label="One cycle per pair (11.1 ms). No memory allocation in the loop. Track state on the Jetson: median 2.2 ms."; labelloc=b; labeljust=l; graph [fontname="Helvetica", fontsize=13, bgcolor="#fcfcfb", pad=0.3, nodesep=0.35, ranksep=0.45];
+node [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#c3c2b7", fontcolor="#0b0b0b", penwidth=1.2, margin="0.18,0.08"];
+edge [fontname="Helvetica", fontsize=10, color="#52514e", fontcolor="#52514e", arrowsize=0.7];
+ a [label="1  Pair reader\nnewest pair, crop rows only,\nseqlock check", fillcolor="#e8f1fc"];
+ b [label="2  Cloud builder\nsample pixels -> 3D points\n-> rig frame (camera transforms)", fillcolor="#e8f1fc"];
+ c [label="3  Scene filter\nwork volume, predicted box,\nbackground map", fillcolor="#e8f1fc"];
+ d [label="4  ICP point-to-plane\nOpen3D port, Tukey kernel\n50 -> 20 -> 10 mm", fillcolor="#fdeee7", color="#eb6834"];
+ e [label="5  Fit check\npoints, RMSE, inliers, eigenvalue,\njump, free-space violations", fillcolor="#fdeee7", color="#eb6834"];
+ f [label="6  Filter\nKalman (position)\nalpha-beta on SO(3) (rotation)", fillcolor="#e6f6ef", color="#1baf7a"];
+ o [label="pose record (640 B)\n+ cloud record", shape=cylinder, fillcolor="#f4f4f1"];
+ a -> b -> c -> d -> e -> f -> o;
+}

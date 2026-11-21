@@ -1,0 +1,14 @@
+{
+ "poses": 4966,
+ "clouds": 1171,
+ "connects": 1,
+ "instances": {
+  "f898d4844e1e55ba": {
+   "first": 207,
+   "last": 5172,
+   "received": 4966,
+   "gaps": 0,
+   "out_of_order": 0
+  }
+ }
+}

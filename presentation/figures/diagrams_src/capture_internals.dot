@@ -1,0 +1,18 @@
+digraph G { rankdir=LR; graph [fontname="Helvetica", fontsize=13, bgcolor="#fcfcfb", pad=0.3, nodesep=0.35, ranksep=0.45];
+node [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#c3c2b7", fontcolor="#0b0b0b", penwidth=1.2, margin="0.18,0.08"];
+edge [fontname="Helvetica", fontsize=10, color="#52514e", fontcolor="#52514e", arrowsize=0.7];
+ sdkA [label="SDK thread A\non_frame()", fillcolor="#e8f1fc"]; sdkB [label="SDK thread B\non_frame()", fillcolor="#e8f1fc"];
+ rA [label="ring A\n8 slots x 814 KB\n(single producer / consumer)", shape=box3d, fillcolor="#f4f4f1"];
+ rB [label="ring B\n8 slots x 814 KB", shape=box3d, fillcolor="#f4f4f1"];
+ m [label="matcher thread\n1. wait 5 s per camera, global time only\n2. measure frame period P\n3. pair mutual-nearest, dt within ± P/2\n4. unpaired after 3 P; every frame leaves once", fillcolor="#fdeee7", color="#eb6834"];
+ shm [label="/d435_pairs\nheader + 4 slots\nseq counter per slot (seqlock)\nwriter never waits", shape=cylinder, fillcolor="#f4f4f1"];
+ rd [label="readers\n(tracker, test reader)\ndetect torn reads,\nreattach on new writer", fillcolor="#ffffff"];
+ sup [label="supervisor thread\nwatchdog: no frame for 10 P -> restart camera\nfrequency check, status line", fillcolor="#fff6dd", color="#eda100"];
+ hb [label="heartbeat thread\nevery 50 ms", fillcolor="#fff6dd", color="#eda100"];
+ sdkA -> rA [label="memcpy\np99 0.3 ms"]; sdkB -> rB [label="memcpy"];
+ rA -> m; rB -> m;
+ sdkA -> m [style=dashed, label="futex wake", constraint=false]; 
+ m -> shm [label="pair record\n+ both images"]; shm -> rd [label="futex notify"];
+ sup -> sdkA [style=dashed, arrowhead=none, color="#898781"]; sup -> sdkB [style=dashed, arrowhead=none, color="#898781"];
+ hb -> shm [style=dashed, color="#898781"];
+}

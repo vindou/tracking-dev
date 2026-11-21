@@ -1,0 +1,21 @@
+digraph G { rankdir=LR; graph [fontname="Helvetica", fontsize=13, bgcolor="#fcfcfb", pad=0.3, nodesep=0.35, ranksep=0.45];
+node [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#c3c2b7", fontcolor="#0b0b0b", penwidth=1.2, margin="0.18,0.08"];
+edge [fontname="Helvetica", fontsize=10, color="#52514e", fontcolor="#52514e", arrowsize=0.7];
+ subgraph cluster_j { label="Jetson Orin Nano  (C++17, Eigen, nanoflann)"; style="rounded"; color="#c3c2b7"; fontcolor="#52514e";
+  camA [label="D435i A\n848x480 depth @ 89.87 fps", fillcolor="#e8f1fc"];
+  camB [label="D435i B\n848x480 depth @ 89.87 fps", fillcolor="#e8f1fc"];
+  cap [label="d435_capture\npairs frames by timestamp\n(within half a frame, 5.56 ms)", fillcolor="#e8f1fc", color="#2a78d6"];
+  pairs [label="/d435_pairs\nshared memory, 4 slots", shape=cylinder, fillcolor="#f4f4f1"];
+  trk [label="trk_tracker\nsearch / track / lost\nICP + fit check + filter", fillcolor="#fdeee7", color="#eb6834"];
+  pose [label="/trk_pose\n256 slots", shape=cylinder, fillcolor="#f4f4f1"];
+  cloud [label="/trk_cloud\n4 slots", shape=cylinder, fillcolor="#f4f4f1"];
+  br [label="trk_bridge\nsend queue, drops oldest clouds first", fillcolor="#e6f6ef", color="#1baf7a"];
+ }
+ subgraph cluster_m { label="MacBook"; style="rounded"; color="#c3c2b7"; fontcolor="#52514e";
+  v [label="viewer.py (viser)\nrig, cameras, cloud, object,\npath, status", fillcolor="#e6f6ef", color="#1baf7a"];
+  web [label="browser\nlocalhost:8080", fillcolor="#ffffff"];
+ }
+ camA -> cap [label="USB 3"]; camB -> cap [label="USB 3"];
+ cap -> pairs -> trk; trk -> pose; trk -> cloud; pose -> br; cloud -> br;
+ br -> v [label="TCP 9870\nUSB network"]; v -> web;
+}

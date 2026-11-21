@@ -1,0 +1,13 @@
+digraph G { rankdir=LR; graph [fontname="Helvetica", fontsize=13, bgcolor="#fcfcfb", pad=0.3, nodesep=0.35, ranksep=0.45];
+node [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#c3c2b7", fontcolor="#0b0b0b", penwidth=1.2, margin="0.18,0.08"];
+edge [fontname="Helvetica", fontsize=10, color="#52514e", fontcolor="#52514e", arrowsize=0.7];
+ node [shape=box, style="rounded,filled", fontsize=13, margin="0.25,0.12"];
+ S [label="SEARCH\nwhole work volume\nstart positions x 72 orientations\n8 ms slice per cycle", fillcolor="#fff6dd", color="#fab219"];
+ T [label="TRACK\ncrop around predicted box\n350 points, ICP from prediction", fillcolor="#e3f4e3", color="#0ca30c"];
+ L [label="LOST\nprediction only, pose not valid\ncrop box x 2.5", fillcolor="#fdeee7", color="#ec835a"];
+ S -> T [label="best candidate\npasses fit check"];
+ T -> T [label="fit passes"];
+ T -> L [label="3 rejected fits"];
+ L -> T [label="fit passes"];
+ L -> S [label="45 rejected fits (~0.5 s)"];
+}

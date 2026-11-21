@@ -1,0 +1,58 @@
+{
+ "run": "caprestart_1",
+ "poses": 2511,
+ "state_fraction": {
+  "search": 1.0,
+  "track": 0.0,
+  "lost": 0.0
+ },
+ "valid_fraction": 0.0,
+ "calc_all_ms": {
+  "p50": 7.8155,
+  "p99": 12.6093,
+  "max": 20.368299999999998,
+  "le_5ms_pct": 2.4691358024691357,
+  "le_2ms_pct": 0.0
+ },
+ "delay_capture_to_publish_ms": {
+  "p50": 20.343424,
+  "p99": 28.599776
+ },
+ "tracker": {
+  "run_s": 50.096,
+  "cycles": 2699,
+  "valid": 0,
+  "search": 2699,
+  "track": 0,
+  "lost": 0,
+  "pairs_used": 2699,
+  "pairs_skipped": 0,
+  "pairs_torn": 0,
+  "capture_published": 1356,
+  "attaches": 2,
+  "clouds": 767,
+  "cycle_p50_ms": 7.82,
+  "cycle_p99_ms": 12.72,
+  "cycle_max_ms": 20.37,
+  "cycle_le_2ms_pct": 0.0,
+  "cycle_le_5ms_pct": 2.371,
+  "solve_p50_ms": 6.58,
+  "solve_p99_ms": 11.16,
+  "read_p99_ms": 1.02,
+  "delay_p50_ms": 20.3,
+  "delay_p99_ms": 28.6,
+  "rss_kb": 14312,
+  "pose_instance": "3225c57de165892b"
+ },
+ "pair_use_pct": 199.041,
+ "tegrastats": {
+  "cpu_mean_pct": 18.3,
+  "tj_max_c": 44.468,
+  "ram_used_mb_max": 862
+ },
+ "kernel": {
+  "new_lines": 168,
+  "usb_error_lines": 0,
+  "examples": []
+ }
+}

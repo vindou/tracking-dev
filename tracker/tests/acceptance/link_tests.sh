@@ -5,6 +5,7 @@
 set -u
 JETSON=${JETSON:-jetson}
 IP=${JETSON_IP:-192.168.55.1}
+JH=${JETSON_HOME:-$(ssh "$JETSON" 'echo $HOME')}   # Jetson home (absolute; ~ would expand on the Mac)
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 PY=$ROOT/.venv/bin/python
 VIEWER=$ROOT/viewer/viewer.py
@@ -19,9 +20,15 @@ EOF
 }
 start_bg() {   # start_bg DIR NAME COMMAND...  (on the Jetson, in the background, pid in DIR/NAME.pid)
     local d=$1 n=$2; shift 2
-    jet "cd $d && nohup $* > $n.log 2>&1 < /dev/null & echo \\\$! > $d/$n.pid"
+    if [ "$n" = capture ]; then
+        # the cameras re-enumerate on USB after the previous capture program closes them: wait until no capture
+        # program runs, then 5 s more (without this, the next start can fail with "camera not found" / USB busy)
+        jet "for i in \$(seq 1 150); do pgrep -f 'build/d43[5]_capture' > /dev/null || break; sleep 0.2; done"
+        sleep 5
+    fi
+    jet "cd $d || exit 1; nohup $* > $n.log 2>&1 < /dev/null & echo \$! > $d/$n.pid"
 }
-stop_bg() { jet "kill -$2 \\\$(cat $1/$3.pid) 2>/dev/null; for i in \\\$(seq 1 100); do kill -0 \\\$(cat $1/$3.pid) 2>/dev/null || break; sleep 0.1; done"; }
+stop_bg() { jet "kill -$2 \$(cat $1/$3.pid) 2>/dev/null; for i in \$(seq 1 100); do kill -0 \$(cat $1/$3.pid) 2>/dev/null || break; sleep 0.1; done"; }
 viewer() {   # viewer MDIR DURATION [extra]
     "$PY" "$VIEWER" --host "$IP" --http-port 8090 --duration "$2" --csv "$1/viewer_poses.csv" --stats-json "$1/viewer_stats.json" > "$1/viewer.log" 2>&1
 }
@@ -29,7 +36,7 @@ fetch() { scp -q "$JETSON:$1/*" "$2/" 2>/dev/null; }
 
 l_link() {
     for r in 1 2 3; do
-        local J=~/tracker_logs/link_$r M=$MLOG/link_$r; rm -rf "$M"; mkdir -p "$M"
+        local J=$JH/tracker_logs/link_$r M=$MLOG/link_$r; rm -rf "$M"; mkdir -p "$M"
         jet "rm -rf $J; mon_start $J"
         start_bg $J capture "\$CAP --config \$CONF --duration 80 --final-json $J/capture.json --hist-out /dev/null --delay-hist-out /dev/null"
         sleep 1
@@ -57,7 +64,7 @@ PY
 
 # Viewer stopped (SIGSTOP) for 10 s while connected, then continued: tracker cycle time unchanged; bridge counts drops.
 l_pause() {
-    local J=~/tracker_logs/viewer_pause M=$MLOG/viewer_pause; rm -rf "$M"; mkdir -p "$M"
+    local J=$JH/tracker_logs/viewer_pause M=$MLOG/viewer_pause; rm -rf "$M"; mkdir -p "$M"
     jet "rm -rf $J; mon_start $J"
     start_bg $J capture "\$CAP --config \$CONF --duration 75 --final-json $J/capture.json --hist-out /dev/null --delay-hist-out /dev/null"
     sleep 1
@@ -100,7 +107,7 @@ PY
 
 # Viewer started before the bridge: it waits and connects when the bridge starts.
 l_nobridge() {
-    local J=~/tracker_logs/viewer_first M=$MLOG/viewer_first; rm -rf "$M"; mkdir -p "$M"
+    local J=$JH/tracker_logs/viewer_first M=$MLOG/viewer_first; rm -rf "$M"; mkdir -p "$M"
     jet "rm -rf $J; mon_start $J"
     viewer "$M" 45 &
     local vp=$!
@@ -120,7 +127,7 @@ l_nobridge() {
 # Tracker killed with SIGKILL and started again; bridge and viewer continue. Synthetic replay keeps the tracker in
 # track state.
 l_kill() {
-    local J=~/tracker_logs/tracker_kill M=$MLOG/tracker_kill; rm -rf "$M"; mkdir -p "$M"
+    local J=$JH/tracker_logs/tracker_kill M=$MLOG/tracker_kill; rm -rf "$M"; mkdir -p "$M"
     jet "rm -rf $J; mon_start $J"
     start_bg $J replay "\$B/trk_replay --in \$DATA/synth_replay.trk --loops 8 --start-delay 1"
     start_bg $J tracker1 "\$B/trk_tracker --config \$TCONF --initial-pose -0.05,0.02,0.45,0.9,0.1,0.3,0.3"
@@ -130,12 +137,12 @@ l_kill() {
     local vp=$!
     sleep 18
     stop_bg $J KILL tracker1
-    jet "echo killed \\\$(date +%s%N) >> $J/meta.txt; ls /dev/shm | grep trk_ >> $J/meta.txt"
+    jet "echo killed \$(date +%s%N) >> $J/meta.txt; ls /dev/shm | grep trk_ >> $J/meta.txt"
     sleep 3
     start_bg $J tracker2 "\$B/trk_tracker --config \$TCONF --duration 20"
     wait $vp
     sleep 8
-    jet "stop_bg() { :; }; kill -TERM \\\$(cat $J/replay.pid) 2>/dev/null; sleep 2; mon_stop $J"
+    jet "stop_bg() { :; }; kill -TERM \$(cat $J/replay.pid) 2>/dev/null; sleep 2; mon_stop $J"
     fetch $J "$M"
     python3 - "$M" <<'PY' | tee "$M/result.txt"
 import json, sys
@@ -152,7 +159,7 @@ PY
 
 # Long run: 30 min live with bridge and viewer; RSS of tracker, bridge (Jetson) and viewer (Mac) every 30 s.
 l_long() {
-    local J=~/tracker_logs/long_30min M=$MLOG/long_30min; rm -rf "$M"; mkdir -p "$M"
+    local J=$JH/tracker_logs/long_30min M=$MLOG/long_30min; rm -rf "$M"; mkdir -p "$M"
     local DUR=${LONG_S:-1800}
     jet "rm -rf $J; mon_start $J"
     start_bg $J capture "\$CAP --config \$CONF --duration $((DUR + 30)) --final-json $J/capture.json --hist-out /dev/null --delay-hist-out /dev/null"
@@ -165,10 +172,13 @@ l_long() {
     sleep 3
     local vpid; vpid=$(pgrep -f "viewer.py --host $IP --http-port 8090" | head -1)
     echo "t_s,tracker_rss_kb,bridge_rss_kb,viewer_rss_kb" > "$M/rss.csv"
+    echo "t_s,proc,vmrss_kb,rss_anon_kb,rss_file_kb,rss_shmem_kb,anon_huge_kb" > "$M/mem_detail.csv"
     local t=0
     while kill -0 $vp 2>/dev/null; do
-        local r; r=$(jet "ps -o rss= -p \\\$(cat $J/tracker.pid) | tr -d ' '; ps -o rss= -p \\\$(cat $J/bridge.pid) | tr -d ' '" | tr '\n' ',')
+        local r; r=$(jet "ps -o rss= -p \$(cat $J/tracker.pid) | tr -d ' '; ps -o rss= -p \$(cat $J/bridge.pid) | tr -d ' '" | tr '\n' ',')
         echo "$t,${r}$(ps -o rss= -p "$vpid" 2>/dev/null | tr -d ' ')" >> "$M/rss.csv"
+        # diagnostic only (not part of the criterion): resident memory by kind and huge pages, tracker and bridge
+        jet "for p in tracker bridge; do echo $t,\$p,\$(awk '/^(VmRSS|RssAnon|RssFile|RssShmem):/{printf \"%s,\",\$2}' /proc/\$(cat $J/\$p.pid)/status)\$(awk '/^AnonHugePages:/{print \$2}' /proc/\$(cat $J/\$p.pid)/smaps_rollup); done" >> "$M/mem_detail.csv" 2>/dev/null
         sleep 30; t=$((t + 30))
     done
     sleep 30

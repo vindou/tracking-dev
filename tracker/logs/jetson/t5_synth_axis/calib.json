@@ -1,0 +1,67 @@
+{
+ "assumption_check": [
+  {
+   "assumption": "nominal (x right, y down, z forward)",
+   "difference_deg": 100.08125994141676,
+   "difference_mm": 243.50065728673647
+  },
+  {
+   "assumption": "camera frame rotated 180 deg about z (x left, y up)",
+   "difference_deg": 0.11611327985470726,
+   "difference_mm": 0.10656584381230171
+  },
+  {
+   "assumption": "camera frame rotated 180 deg about x (y up, z backward)",
+   "difference_deg": 100.08125994141676,
+   "difference_mm": 732.76301091256266
+  },
+  {
+   "assumption": "camera frame rotated 180 deg about y (x left, z backward)",
+   "difference_deg": 0.11611327985470726,
+   "difference_mm": 962.69595042508195
+  },
+  {
+   "assumption": "names swapped (D435i_1 <-> D435i_2)",
+   "difference_deg": 100.08125994141676,
+   "difference_mm": 243.50065728673647
+  },
+  {
+   "assumption": "translations in cm instead of mm",
+   "difference_deg": 100.08125994141676,
+   "difference_mm": 4581.3916442671616
+  },
+  {
+   "assumption": "translations in inches instead of mm",
+   "difference_deg": 100.08125994141676,
+   "difference_mm": 12013.225277324414
+  }
+ ],
+ "cameras": {
+  "D435i_1": {
+   "T_rig_from_camera": [
+    [-1, 0, 0, 0.017500000000000002],
+    [0, -0.90630778700000003, 0.42261826200000002, -0.24066399999999999],
+    [0, 0.42261826200000002, 0.90630778700000003, 0.056149500000000005],
+    [0, 0, 0, 1]
+   ],
+   "note": "configured transform (kept)",
+   "serial": "234322070408"
+  },
+  "D435i_2": {
+   "T_rig_from_camera": [
+    [0.99999895132080041, -0.0012498137255133313, 0.00073165767372002793, 0.052208945951923533],
+    [-0.00038523117293848231, 0.25744952313002389, 0.9662916716963903, -0.55022025280864884],
+    [-0.0013960495131157258, -0.9662909402237575, 0.25744877168085684, 0.42543689835783222],
+    [0, 0, 0, 1]
+   ],
+   "note": "corrected by trk_calib",
+   "serial": "234322070144"
+  }
+ },
+ "correction_of_B_deg": 100.08125993986087,
+ "correction_of_B_mm": 875.63144134522668,
+ "difference_before_deg": 100.08125993830498,
+ "difference_before_mm": 243.50065732303224,
+ "pairs": 300,
+ "version": 1
+}

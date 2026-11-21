@@ -54,6 +54,7 @@ python3 -m venv .venv && .venv/bin/pip install viser numpy trimesh cascadio open
 | `trk_camid` (T4) | Jetson | camera identification (cover the -Y camera) -> serials in the configuration |
 | `trk_calib` (T5) | Jetson | single-camera solves, camera-frame check, calibration file |
 | `trk_bgmap` (T6) | Jetson | background map of the empty scene (20 mm grid) |
+| `trk_hint_eval` | both | acquisition on independent static scenes, classical search with and without pose hypotheses of the flow module (`../flow`) |
 | `trk_offline` | both | tracker core on a pair file -> pose CSV (offline reference, analysis) |
 | `trk_posedump` | Jetson | pose buffer -> CSV |
 | `trk_clouddump`, `trk_workvolume` | both | point cloud of one pair -> CSV; work volume from the camera geometry |
@@ -103,7 +104,7 @@ the rig frame, from `trk_workvolume`: region both cameras see, 0.2-0.8 m from th
 `background_map`; `cloud` (point budgets, crop margins); `icp` (distance sequence 50/20/10 mm, Tukey kernel with
 k = max(5 mm, 0.5 x distance), iterations, convergence); `fit_check` (limits); `filter` (Kalman and orientation filter
 gains); `states` (lost and search thresholds, search time limit 8 ms per cycle, orientations); `bridge` (address
-192.168.55.1, port 9870, queue bytes); `cloud_rate_hz` (15); `status_interval_s` (10).
+192.168.55.1, port 9870, queue bytes); `cloud_rate_hz` (30; the task's value is 15, see DEVIATIONS 36); `status_interval_s` (10).
 
 ## Shared-memory rings (pose and cloud buffers)
 

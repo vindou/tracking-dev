@@ -15,6 +15,14 @@ using namespace trkt;
 
 namespace {
 int env_int(const char* n, int def) { const char* e = std::getenv(n); return e ? std::atoi(e) : def; }
+// Optional per-sample CSV output for plots (TRK_PLOT_DIR set): no effect on the tests or their criteria.
+FILE* plot_file(const char* name) {
+    const char* d = std::getenv("TRK_PLOT_DIR");
+    if (!d) return nullptr;
+    char path[1024];
+    std::snprintf(path, sizeof path, "%s/%s", d, name);
+    return std::fopen(path, "w");
+}
 double q(std::vector<double> v, double p) {
     if (v.empty()) return NAN;
     std::sort(v.begin(), v.end());
@@ -155,6 +163,8 @@ TEST(synth_acquisition_100_poses) {
     std::vector<double> t_acq;
     double max_cycle_us = 0;
     std::vector<double> cyc;
+    FILE* pf = plot_file("acquisition.csv");
+    if (pf) std::fprintf(pf, "pose,time_to_track_s,pos_err_mm,rot_err_deg\n");
     for (int k = 0; k < N; k++) {
         SynthScenario s;
         s.T0 = random_pose_in_view(cams, object_mesh(), rng);
@@ -172,6 +182,7 @@ TEST(synth_acquisition_100_poses) {
             const double t = (got + 1) * 11.1283e-3;
             const PoseError e = pose_error(filt_pose(h.step(got + 1)), h.truth());
             const bool bad = e.pos_m > 0.005 || e.rot_rad > 5 * M_PI / 180;
+            if (pf) std::fprintf(pf, "%d,%.4f,%.3f,%.3f\n", k, t, e.pos_m * 1000, e.rot_rad * 180 / M_PI);
             if (bad) {
                 wrong++;
                 std::printf("  pose %d: WRONG pose passed the fit check after %.2f s: error %.1f mm, %.1f deg\n", k, t,
@@ -184,6 +195,7 @@ TEST(synth_acquisition_100_poses) {
             std::printf("  pose %d: no track within 2 s\n", k);
         }
     }
+    if (pf) std::fclose(pf);
     std::printf("  %d poses: track within 1 s with the right pose: %d (%.0f %%); wrong poses accepted: %d; time to track p50/p90/max %.2f/%.2f/%.2f s\n",
                 N, ok, 100.0 * ok / N, wrong, q(t_acq, .5), q(t_acq, .9), q(t_acq, 1));
     std::printf("  cycle time p50/p99/max %.0f/%.0f/%.0f us (search slice limit %.1f ms)\n", q(cyc, .5), q(cyc, .99),
@@ -211,8 +223,17 @@ TEST(synth_moving_object) {
         int not_track = 0, invalid = 0;
         double se = 0, se_r = 0, mx = 0;
         int n = 0;
+        char pname[64];
+        std::snprintf(pname, sizeof pname, "moving_offset_%.1f.csv", off);
+        FILE* pf = plot_file(pname);
+        if (pf) std::fprintf(pf, "cycle,time_s,track_state,valid,filt_err_mm,filt_err_deg,icp_err_mm,icp_err_deg\n");
         for (int i = 0; i < frames; i++) {
             const PoseRecord& p = h.step(i);
+            if (pf) {
+                const PoseError ef = pose_error(filt_pose(p), h.truth()), ei = pose_error(icp_pose(p), h.truth());
+                std::fprintf(pf, "%d,%.4f,%u,%u,%.4f,%.4f,%.4f,%.4f\n", i, i * 11.1283e-3, p.track_state, p.valid,
+                             ef.pos_m * 1000, ef.rot_rad * 180 / M_PI, ei.pos_m * 1000, ei.rot_rad * 180 / M_PI);
+            }
             if (p.track_state != kStateTrack) not_track++;
             if (!p.valid) invalid++;
             if (i >= 10) {   // after the filter's start-up
@@ -223,6 +244,7 @@ TEST(synth_moving_object) {
                 n++;
             }
         }
+        if (pf) std::fclose(pf);
         const double rms = std::sqrt(se / n);
         std::printf("  offset %.1f ms: cycles not in track %d, invalid %d of %d; filtered position error RMS %.2f mm (max %.2f), orientation RMS %.2f deg\n",
                     off, not_track, invalid, frames, rms * 1000, mx * 1000, std::sqrt(se_r / n) * 180 / M_PI);
@@ -250,8 +272,14 @@ TEST(synth_object_removed_and_put_back) {
         std::string seq;
         uint32_t last = 99;
         int bad_valid = 0;
+        char pname[64];
+        std::snprintf(pname, sizeof pname, "removed_run_%d.csv", run);
+        FILE* pf = plot_file(pname);
+        if (pf) std::fprintf(pf, "cycle,time_s,present,track_state,valid,point_count,rmse_mm\n");
         for (int i = 0; i < 420; i++) {
             const PoseRecord& p = h.step(i);
+            if (pf) std::fprintf(pf, "%d,%.4f,%d,%u,%u,%u,%.3f\n", i, i * 11.1283e-3, h.present() ? 1 : 0, p.track_state,
+                                 p.valid, p.point_count, p.fit_rmse * 1000);
             if (p.track_state != last) {
                 seq += p.track_state == kStateTrack ? "T" : p.track_state == kStateLost ? "L" : "S";
                 last = p.track_state;
@@ -261,9 +289,60 @@ TEST(synth_object_removed_and_put_back) {
                 if (!h.present() || e.pos_m > 0.005 || e.rot_rad > 5 * M_PI / 180) bad_valid++;
             }
         }
+        if (pf) std::fclose(pf);
         const bool ok = seq == "TLST" && bad_valid == 0 && h.core().state() == kStateTrack;
         std::printf("  run %d: states %s, invalid poses marked valid %d -> %s\n", run, seq.c_str(), bad_valid, ok ? "ok" : "FAIL");
         if (ok) sequences_ok++;
     }
     CHECK_EQ(sequences_ok, runs);
+}
+
+// Pose hypotheses from outside (flow module): a hypothesis 20 mm / 12 degrees from the truth is accepted in the first
+// search cycle; hypotheses far from the object are not accepted and the normal search follows.
+TEST(synth_pose_hints) {
+    std::mt19937_64 rng(404);
+    Camera cams[2];
+    default_cameras(cams);
+    int first_cycle = 0, bad_accepted = 0, fallback_ok = 0;
+    const int N = 20;
+    for (int k = 0; k < N; k++) {
+        SynthScenario s;
+        s.T0 = random_pose_in_view(cams, object_mesh(), rng);
+        s.render.noise_sigma_m = 0.001;
+        s.seed = uint64_t(4000 + k);
+        {
+            Harness h(s);
+            Mat4 hint[2];
+            hint[0] = s.T0;
+            hint[0].block<3, 1>(0, 3) += Vec3(0.25, 0.1, 0.1);                              // nothing there
+            const Eigen::AngleAxisd aa(12 * M_PI / 180, Vec3(1, 2, 3).normalized());
+            hint[1] = s.T0 * make_pose(aa.toRotationMatrix(), Vec3(0.012, -0.012, 0.011));   // near the truth
+            h.core().set_hints(hint, 2);
+            const PoseRecord& p = h.step(0);
+            const PoseError e = pose_error(icp_pose(p), h.truth());
+            if (p.valid && p.track_state == kStateTrack && h.core().hints_tried() == 2 && e.pos_m < 0.005 && e.rot_rad < 5 * M_PI / 180)
+                first_cycle++;
+        }
+        {
+            Harness h(s);
+            Mat4 hint[1];
+            hint[0] = s.T0;
+            hint[0].block<3, 1>(0, 3) += Vec3(0.25, 0.1, 0.1);
+            h.core().set_hints(hint, 1);
+            const PoseRecord& p0 = h.step(0);
+            if (p0.valid && pose_error(icp_pose(p0), h.truth()).pos_m > 0.05) bad_accepted++;
+            for (int i = 1; i < 180; i++) {
+                const PoseRecord& p = h.step(i);
+                if (p.track_state == kStateTrack && p.valid) {
+                    if (pose_error(icp_pose(p), h.truth()).pos_m < 0.005) fallback_ok++;
+                    break;
+                }
+            }
+        }
+    }
+    std::printf("  %d poses: near hypothesis accepted in the first cycle %d; far hypothesis accepted %d; search after a failed "
+                "hypothesis found the pose %d\n", N, first_cycle, bad_accepted, fallback_ok);
+    CHECK_GE(double(first_cycle), 0.9 * N);
+    CHECK_EQ(bad_accepted, 0);
+    CHECK_GE(double(fallback_ok), 0.9 * N);
 }

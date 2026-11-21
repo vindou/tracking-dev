@@ -1,0 +1,14 @@
+digraph G { rankdir=TB; graph [fontname="Helvetica", fontsize=13, bgcolor="#fcfcfb", pad=0.3, nodesep=0.35, ranksep=0.45];
+node [fontname="Helvetica", fontsize=12, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#c3c2b7", fontcolor="#0b0b0b", penwidth=1.2, margin="0.18,0.08"];
+edge [fontname="Helvetica", fontsize=10, color="#52514e", fontcolor="#52514e", arrowsize=0.7];
+ a [label="Filtered cloud of the whole work volume\n(both cameras, about every 3rd pixel, background map removed)", fillcolor="#e8f1fc"];
+ b [label="Start positions\nobject-sized clusters of 4 cm cells + density peaks\nranked by min(points from camera A, points from camera B)", fillcolor="#e8f1fc"];
+ c [label="For each start position: 72 orientations spread evenly over SO(3)", fillcolor="#e8f1fc"];
+ d [label="Coarse ICP: <= 250 points near the start, 50 -> 20 mm, 10 iterations\nscore = fitness - free-space violations", fillcolor="#fdeee7", color="#eb6834"];
+ e [label="Refine the 4 best: full ICP 50 -> 20 -> 10 mm + fit check", fillcolor="#fdeee7", color="#eb6834"];
+ f [label="Best candidate that passes  ->  TRACK", fillcolor="#e3f4e3", color="#0ca30c"];
+ g [label="none passes: next start position / next round", fillcolor="#ffffff"];
+ a -> b -> c -> d -> e; e -> f [label="pass"]; e -> g [label="no pass"]; g -> c [style=dashed];
+ note [shape=plaintext, style="", label="Work is split over cycles: stops before the 8 ms budget, at least one step per cycle.", fontcolor="#52514e", fontsize=11];
+ f -> note [style=invis];
+}

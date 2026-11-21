@@ -4,7 +4,9 @@
 # File times are set to the Jetson's clock (its wall clock differs from the Mac's) so that make sees no clock skew.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-rsync -rlp --delete --exclude 'build*' --exclude 'logs' tracker/ jetson:tracker/
+# --delete keeps the Jetson copy equal to the Mac copy, except: builds, logs, and files made on the Jetson in config/
+# (background maps, calibration files: config/*.bin, config/calib*.json)
+rsync -rlp --delete --exclude 'build*' --exclude 'logs' --exclude 'config/*.bin' --exclude 'config/calib*.json' tracker/ jetson:tracker/
 rsync -rlp models/ jetson:models/
 VARIANTS=${*:-normal}
 ssh jetson "cd ~/tracker && find . -path './build*' -prune -o -type f -exec touch {} + &&

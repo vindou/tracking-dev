@@ -1,0 +1,6 @@
+start_uptime_s=86833.34
+tracker_rc=0
+capture_rc=0
+end_uptime_s=86915.17
+shm_left=0
+own_processes_left=0

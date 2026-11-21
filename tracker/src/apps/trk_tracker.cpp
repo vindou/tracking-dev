@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "common/clock.hpp"
+#include "common/no_thp.hpp"
 #include "core/argutil.hpp"
 #include "core/config.hpp"
 #include "core/pair_source.hpp"
@@ -64,6 +65,7 @@ const char* state_name(uint32_t s) { return s == kStateTrack ? "track" : s == kS
 }  // namespace
 
 int main(int argc, char** argv) {
+    trk::disable_transparent_huge_pages();   // before any allocation (common/no_thp.hpp)
     sigset_t sigs;
     sigemptyset(&sigs);
     sigaddset(&sigs, SIGINT);
@@ -274,7 +276,8 @@ int main(int argc, char** argv) {
         if (FILE* f = std::fopen(final_json.c_str(), "w")) {
             uint64_t le2 = 0, le5 = 0, all = 0;
             for (std::size_t i = 0; i < tot.size(); i++) { all += tot[i]; if (i <= 200) le2 += tot[i]; if (i <= 500) le5 += tot[i]; }
-            std::fprintf(f, "{\"run_s\": %.3f, \"cycles\": %" PRIu64 ", \"valid\": %" PRIu64 ", \"search\": %" PRIu64 ", \"track\": %" PRIu64
+            char js[2048];
+            std::snprintf(js, sizeof js, "{\"run_s\": %.3f, \"cycles\": %" PRIu64 ", \"valid\": %" PRIu64 ", \"search\": %" PRIu64 ", \"track\": %" PRIu64
                          ", \"lost\": %" PRIu64 ", \"pairs_used\": %" PRIu64 ", \"pairs_skipped\": %" PRIu64 ", \"pairs_torn\": %" PRIu64
                          ", \"capture_published\": %" PRIu64 ", \"attaches\": %" PRIu64 ", \"clouds\": %" PRIu64
                          ", \"cycle_p50_ms\": %.4f, \"cycle_p99_ms\": %.4f, \"cycle_max_ms\": %.4f, \"cycle_le_2ms_pct\": %.3f"
@@ -286,6 +289,12 @@ int main(int argc, char** argv) {
                          st.total.max_value(tot), all ? 100.0 * double(le2) / double(all) : 0.0, all ? 100.0 * double(le5) / double(all) : 0.0,
                          st.solve.quantile(sol, 0.5), st.solve.quantile(sol, 0.99), st.read.quantile(rd, 0.99),
                          st.delay.quantile(dl, 0.5), st.delay.quantile(dl, 0.99), rss_kb(), pose_w->instance_id());
+            // quantiles of an empty histogram are NaN (no cycle); JSON has no NaN: written as null
+            std::string out(js);
+            for (const char* bad : {"-nan", "nan"})
+                for (std::size_t k; (k = out.find(std::string(": ") + bad)) != std::string::npos;)
+                    out.replace(k + 2, std::strlen(bad), "null");
+            std::fputs(out.c_str(), f);
             std::fclose(f);
         }
     }

@@ -46,6 +46,13 @@ public:
     // Test helpers
     void force_track(const Mat4& T_rig_obj);        // start in track state at this pose (filter initialized)
     void reset_to_search();
+    // Pose hypotheses T_rig_from_object from an external source (the flow module, ../flow). They are tried once, at
+    // the start of the next cycle in search state, before the orientation grid: full ICP from each, the usual fit
+    // check, the best passing one is accepted. At most kMaxHints are kept; nothing is allocated.
+    static constexpr int kMaxHints = 32;
+    // in_order: accept the first hypothesis that passes (they are ranked by the source) instead of the best passing one.
+    void set_hints(const Mat4* T_rig_obj, int n, bool in_order = false);
+    int hints_tried() const { return hints_tried_; }   // of the last cycle
     void set_camera_mask(int mask) { cam_mask_ = mask; }   // bit c: use camera c (T5 single-camera solves)
     TrackState state() const { return state_; }
     Mat4 filtered_pose() const;
@@ -68,6 +75,7 @@ private:
     void evaluate(const open3d::pipelines::registration::RegistrationResultPrealloc& r, const Mat4* pred, PoseRecord& pose,
                   bool check_jump);
     bool search_step(int64_t t_start, PoseRecord& pose);
+    bool try_hints(PoseRecord& pose);
     void fill_cloud(CloudRecord& cloud, const PoseRecord& pose);
     // Free-space check: fraction of the model points facing a camera whose pixel shows a surface farther away than
     // the model surface (the camera sees through the object). checked = points with a usable measurement.
@@ -126,6 +134,9 @@ private:
     double best_fit_ = -1, best_rmse_ = 1e9;
     Mat4 last_icp_T_rig_obj_ = Mat4::Identity();
     double max_extent_ = 0.1;
+    Mat4 hints_[kMaxHints];
+    int n_hints_ = 0, hints_tried_ = 0;
+    bool hints_in_order_ = false;
 };
 
 }  // namespace trk

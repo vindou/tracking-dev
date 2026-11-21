@@ -1,0 +1,38 @@
+# Changes made on the Jetson and on the Mac
+
+Nothing was installed or removed as a system package, no `sudo` was used, and no system setting, firmware, kernel or
+clock was changed on either machine. Everything below is in the user's home directory or the repository.
+
+## Jetson (`ssh jetson`, home `/home/gchang`)
+
+| Path | What | Size | Remove with |
+|---|---|---|---|
+| `~/tracker/` | copy of `tracker/` (by `tools/sync_to_jetson.sh`) with three builds: `build/`, `build-tsan/`, `build-asan/` (ASan + UBSan) | 1.5 GB | `rm -rf ~/tracker` (stops the demo) |
+| `~/tracker/third_party/` | Eigen and nanoflann headers, copied from the Mac (part of the sync) | | with `~/tracker` |
+| `~/models/` | object and rig models (`test_object.model`, `.stl`, `rig.stl`) | 5.3 MB | `rm -rf ~/models` (stops the demo) |
+| `~/tracker_logs/` | logs of all Jetson-side test runs (copied to `tracker/logs/` on the Mac) | 20 MB | `rm -rf ~/tracker_logs` |
+| `~/tracker_data/` | recorded and synthetic pair files (`*.trk`) and cloud dumps (`*.csv`): T4/T5/T6 recordings, real-scene recordings (`real_static_1`, `held_top`, `look`, `now`), synthetic replay file | 1.8 GB | `rm -rf ~/tracker_data` |
+| `~/tracker/config/bgmap_real.bin` | **deleted** by the sync script (rsync `--delete`, D45); it was made by the T6 real-scene run and not used by any test. Make a new map before the demo (`DEMO.md`) | | |
+| `~/flow_probe/` (2026-11-20) | two ONNX files of the flow network (untrained weights) and the `trtexec` logs of the timing run (`trt_k16.log`, `trt_k32.log`) | 10 MB | `rm -rf ~/flow_probe` |
+
+Unchanged: `~/capture/` (capture program from the earlier task; only its existing build is run).
+
+Shared-memory objects created while programs run (removed when they stop): `/d435_pairs` (capture), `/trk_pose`,
+`/trk_cloud` (tracker).
+
+## Mac (repository `tracking-dev/`)
+
+| Path | What | In git |
+|---|---|---|
+| `tracker/`, `viewer/`, `models/`, `assets/` | the deliverables | yes |
+| `.venv/` | Python virtual environment: `viser`, `numpy`, `trimesh`, `cascadio`, `open3d` and their dependencies (500 MB) | ignored |
+| `third_party_src/` | downloaded Eigen and nanoflann sources (164 MB) | ignored |
+| `tracker/build-mac/` | Mac build of the tracker library, tools and unit tests | ignored |
+| `capture/build-mac/`, `capture/build-mac-tsan/` | Mac builds of the capture library, needed to link the pair reader (no source change in `capture/`) | ignored |
+| `viewer/demo_logs/` | logs of the demo runs (50 MB) | ignored |
+| `.venv/` (2026-11-20, flow module) | added `torch` 2.15.0, `onnx`, `onnxscript` and their dependencies (`sympy`, `networkx`, `mpmath`, `filelock`, `fsspec`, `protobuf`, `ml_dtypes`, `onnx_ir`) | ignored |
+| `flow/` | flow module (source in git); `flow/data/` (synthetic training and evaluation scenes, about 1.7 GB) and `flow/runs/` (trained model, ONNX files) | source yes, data and runs ignored |
+| `.gitignore` | entries for `.venv/`, `third_party_src/`, `viewer/poses.csv`, `viewer/demo_logs/` | yes |
+
+Note: `.gitignore` also ignores `*.log` and `*.out`, so most files in `tracker/logs/` would not be committed as they
+are. Add `!tracker/logs/**` to `.gitignore` if the logs should go into the repository.

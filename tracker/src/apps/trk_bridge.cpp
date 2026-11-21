@@ -24,7 +24,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <deque>
+#include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -32,71 +33,16 @@
 #include <vector>
 
 #include "common/clock.hpp"
+#include "common/no_thp.hpp"
 #include "core/config.hpp"
 #include "records/records.hpp"
 #include "shmring/shm_ring.hpp"
+#include "core/send_queue.hpp"
 
 using namespace trk;
 
 namespace {
 std::atomic<bool> g_stop{false};
-
-struct Msg {
-    uint16_t type;
-    std::vector<uint8_t> bytes;   // header + payload
-};
-
-class SendQueue {
-public:
-    explicit SendQueue(long max_bytes) : max_(max_bytes) {}
-    void push(Msg&& m) {
-        std::lock_guard<std::mutex> lk(mu_);
-        if (!client_) return;   // no client: nothing is queued
-        while (bytes_ + long(m.bytes.size()) > max_ && !q_.empty()) {
-            // full: discard the oldest cloud message first, then the oldest pose message
-            auto it = q_.begin();
-            for (auto j = q_.begin(); j != q_.end(); ++j)
-                if (j->type == kNetCloud) { it = j; break; }
-            if (it->type == kNetCloud) dropped_cloud_++;
-            else if (it->type == kNetPose) dropped_pose_++;
-            bytes_ -= long(it->bytes.size());
-            q_.erase(it);
-        }
-        bytes_ += long(m.bytes.size());
-        q_.push_back(std::move(m));
-    }
-    bool pop(Msg& m) {
-        std::lock_guard<std::mutex> lk(mu_);
-        if (q_.empty()) return false;
-        m = std::move(q_.front());
-        q_.pop_front();
-        bytes_ -= long(m.bytes.size());
-        return true;
-    }
-    void set_client(bool c) {
-        std::lock_guard<std::mutex> lk(mu_);
-        client_ = c;
-        if (!c) { q_.clear(); bytes_ = 0; }
-    }
-    uint64_t dropped_pose() const { return dropped_pose_.load(); }
-    uint64_t dropped_cloud() const { return dropped_cloud_.load(); }
-private:
-    std::mutex mu_;
-    std::deque<Msg> q_;
-    long bytes_ = 0, max_;
-    bool client_ = false;
-    std::atomic<uint64_t> dropped_pose_{0}, dropped_cloud_{0};
-};
-
-Msg make_msg(uint16_t type, const void* payload, uint32_t len) {
-    Msg m;
-    m.type = type;
-    m.bytes.resize(sizeof(NetHeader) + len);
-    NetHeader h{kNetMagic, type, kNetVersion, len, 0};
-    std::memcpy(m.bytes.data(), &h, sizeof h);
-    std::memcpy(m.bytes.data() + sizeof h, payload, len);
-    return m;
-}
 
 void to_net_cloud(const CloudRecord& c, NetCloud& n) {
     std::memset(&n, 0, sizeof n);
@@ -123,6 +69,7 @@ void to_net_cloud(const CloudRecord& c, NetCloud& n) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    trk::disable_transparent_huge_pages();   // before any allocation (common/no_thp.hpp)
     sigset_t sigs;
     sigemptyset(&sigs);
     sigaddset(&sigs, SIGINT);
@@ -188,11 +135,11 @@ int main(int argc, char** argv) {
             const auto res = pr->next(pose.get(), 100000000LL);
             if (res == RingReader::Result::Ok) {
                 poses_read.fetch_add(1);
-                q.push(make_msg(kNetPose, pose.get(), sizeof(PoseRecord)));
+                q.push(kNetPose, pose.get());
                 if (cr && cr->latest(cloud.get()) == RingReader::Result::Ok) {
                     clouds_read.fetch_add(1);
                     to_net_cloud(*cloud, *ncloud);
-                    q.push(make_msg(kNetCloud, ncloud.get(), sizeof(NetCloud)));
+                    q.push(kNetCloud, ncloud.get());
                 }
             } else if (res != RingReader::Result::Timeout) {
                 std::printf("[detach] pose buffer: %s\n", RingReader::result_name(res));
@@ -223,7 +170,7 @@ int main(int argc, char** argv) {
                 st.clouds_dropped = q.dropped_cloud();
                 st.tracker_instance_id = tracker_instance.load();
                 st.bridge_time_mono_ns = now;
-                q.push(make_msg(kNetStatus, &st, sizeof st));
+                q.push(kNetStatus, &st);
             }
         }
     });
@@ -231,7 +178,9 @@ int main(int argc, char** argv) {
     std::thread net([&] {
         pthread_setname_np(pthread_self(), "bridge-net");
         int cs = -1;
-        Msg cur;
+        std::vector<uint8_t> cur(SendQueue::kMaxMsg, 0);   // message being sent (allocated once)
+        uint32_t cur_size = 0;
+        uint16_t cur_type = 0;
         std::size_t off = 0;
         bool have = false;
         while (!g_stop.load()) {
@@ -260,7 +209,8 @@ int main(int argc, char** argv) {
                 continue;
             }
             if (!have) {
-                have = q.pop(cur);
+                cur_size = q.pop(cur.data(), cur_type);
+                have = cur_size > 0;
                 off = 0;
             }
             if (!have) {
@@ -278,13 +228,13 @@ int main(int argc, char** argv) {
                 }
                 continue;
             }
-            const ssize_t n = send(cs, cur.bytes.data() + off, cur.bytes.size() - off, MSG_DONTWAIT | MSG_NOSIGNAL);
+            const ssize_t n = send(cs, cur.data() + off, cur_size - off, MSG_DONTWAIT | MSG_NOSIGNAL);
             if (n > 0) {
                 off += std::size_t(n);
-                if (off == cur.bytes.size()) {
+                if (off == cur_size) {
                     have = false;
-                    if (cur.type == kNetPose) poses_sent.fetch_add(1);
-                    else if (cur.type == kNetCloud) clouds_sent.fetch_add(1);
+                    if (cur_type == kNetPose) poses_sent.fetch_add(1);
+                    else if (cur_type == kNetCloud) clouds_sent.fetch_add(1);
                 }
             } else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 pollfd pf{cs, POLLOUT, 0};

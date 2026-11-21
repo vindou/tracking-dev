@@ -130,3 +130,101 @@ are interpretations of open points.
     open, the bridge queue fills, drops are counted), then continued.
 32. Pose messages received by the viewer are counted against the poses the tracker published while the viewer was
     connected (first to last pose number received).
+
+## Changes after the first real-scene runs (2026-11-17, with the user)
+
+33. **Deviation - camera transforms.** The nominal transforms of the task came from a rig assembly that the user found
+    to be assembled wrongly. The corrected assembly (`assets/test_rig_main_assem.step`) moves both camera bodies 52.7 mm
+    outward in y and does not rotate them (matching the old and new camera bodies: residual 0.14 mm). The tracker uses
+    y = -240.664 / +240.664 mm (was -187.964 / +187.964); `assets/d435i_depth_transforms.json` was updated to the same
+    values. Evidence on the real scene (object held in view of both cameras): median distance of camera B's points to
+    camera A's 34.0 mm with the old transforms, 3.3 mm with the new ones (TEST_REPORT phase 7). A reflection of the
+    x offsets of the depth origins was also checked (the user saw the frustum apex on the other side); it made the
+    agreement worse (17.4 mm) and was not applied.
+34. The work volume was recomputed for the new camera positions: x +-0.765, y +-0.29, z 0.235-0.825 m.
+35. The first real-scene runs (search never accepting, T5 failing) had no object in view: the user was away. Those
+    results are superseded; the later real-scene runs have the object held by hand from above (the user cannot leave it
+    on a support), so the "static object" values include the motion of a hand.
+36. **Deviation - cloud buffer content and rate (user request for the demo).** The cloud record holds the whole filtered
+    cloud (crop box in track and lost, work volume in search), thinned to at most 8192 points, with a flag per point:
+    1 inlier / 0 outlier of the last ICP iteration, 2 not given to the solver. The task asks for "the points that the
+    solver used"; those are the points with flag 0 or 1. `"cloud_content": "solver"` in the configuration restores
+    the task's content. The cloud rate is 30 Hz instead of 15 Hz (the viewer's display rate).
+37. Search start positions (found necessary with the object held by hand, where object and arm form one cluster):
+    candidates are object-sized clusters and density peaks (4 cm cells with the most points in their 12 cm
+    neighbourhood); they are ranked by min(points of camera A, points of camera B) within reach, because the object is in
+    view of both cameras and clutter mostly of one; the search decides after each start position (refines its best
+    candidates and accepts a passing one) instead of after all of them.
+38. Viewer (user requests for the demo video): rig mesh gray; a show / hide switch for the camera frames and frustums,
+    each frustum drawn in two sections (red 0-0.3 m "dead zone", green 0.3-0.8 m); a fixed-size phase panel (ACQUIRING
+    with progress, TRACKING updating / predicting with the reason, LOST); position and orientation text; object mesh
+    solid when the fit is accepted, transparent when predicted. The 0.3 m dead zone is drawn only; the tracker keeps
+    the task's 0.2 m minimum camera distance.
+39. The input files of the task were moved to `assets/` (`test_object.step`, `test_rig_main_assem.step`,
+    `d435i_depth_transforms.json`) at the user's request.
+40. T5 on the real scene was skipped at the user's request (2026-11-17). The tracker uses the uncalibrated transforms
+    of the corrected CAD assembly. The T5 tool is tested with synthetic data (camera B correction recovered within
+    1.29 mm / 0.18 degrees on the Jetson, `logs/jetson/t5_synth_correction`; a 180-degree axis convention found as the cause); the frame-convention check on the real
+    scene was done with the cameras' agreement on the held object instead (item 33).
+
+## Changes during the final test runs (2026-11-18)
+
+41. **Bridge send queue without allocation after start.** The first 30-minute run failed the memory criterion: the
+    bridge's resident memory rose once by 628 kB (+26.7 %) when its queue filled for the first time, because each queued
+    message was a separate heap allocation and the C library kept the freed memory. The queue
+    (`src/core/send_queue.hpp`, moved out of `trk_bridge.cpp` for the unit tests) now holds one preallocated, zero-filled
+    slot pool per message type (each large enough for the whole byte limit) and a fixed ring of entries; the discard
+    rule is unchanged (oldest cloud message first, then the oldest message; both counted). New unit tests:
+    `send_queue_*` (order, content, discard rule, 200000 messages to a stalled client with 0 allocations).
+42. **Tracker work arrays written at start.** In the same run the tracker's resident memory rose once by 3.2 MB
+    (+25.4 %) at the first change from search to track: `std::vector<Eigen::Vector3d>::resize` does not write the
+    elements (Eigen does not initialize them), so the pages of the point arrays became resident only when track mode
+    first used more of them, i.e. page faults inside the loop. The arrays (and the ICP workspace) are now filled with
+    zeros at start ("all memory allocated at start" now also means resident at start). `core_process_does_not_allocate`
+    and the ICP allocation test still report 0 allocations.
+43. `trk_tracker --final-json` writes `null` instead of `nan` for timing quantiles of a run without cycles (`nan` is not
+    valid JSON; it stopped the evaluation of one link run).
+44. **Test harness faults (no effect on the system under test).** The first two attempts of the link and viewer tests
+    did not run the system: (a) `tegrastats`, started in the background by the monitor helper, kept the SSH session
+    open and the script waited for it; (b) `~` in the Jetson log path was expanded on the Mac; (c) `cd DIR && nohup
+    CMD &` put the whole list in the background, so each SSH call waited until its program ended and capture, tracker
+    and bridge ran one after the other; the `$!` in the pid files was escaped once too often; (d) the next capture
+    program started while the cameras were still re-enumerating after the previous one ("camera B not found"); the
+    harness now waits until no capture program runs, then 5 s. These attempts are not counted as test results; their
+    logs were overwritten by the repeated runs.
+45. `tools/sync_to_jetson.sh` deleted the real-scene background map `config/bgmap_real.bin` (made on the Jetson by the
+    T6 real-scene run) because `rsync --delete` mirrors `tracker/` from the Mac. The script now keeps `config/*.bin`
+    and `config/calib*.json` on the Jetson. The map was not used by any live test (`background_map` is empty in the
+    configuration).
+46. **Finding: acquisition of static scene structure without a background map.** In the later live runs without the
+    object, the search accepted a pose on static structure about 0.24 m wide at (-0.17, 0.22, 0.42) m in the rig frame
+    (present in the scene recordings of 2026-11-17 and 2026-11-18; whether it is new or was moved closer could not be
+    determined without the user). The fits are marginal (median RMSE 3.5 mm against the 4 mm limit, smallest eigenvalue
+    0.015 against 0.01) and jitter (position SD 2.7 mm, orientation 2 degrees), but they pass every fit-check
+    criterion. The intended defence is the background map (README demo step 2); without it, these fit-check limits do
+    not separate this structure from the object. The limits were not changed: tighter limits would first have to be
+    checked against fits on the real object, and the user was not available to hold it.
+
+47. **Transparent huge pages turned off for the tracker and the bridge (long run, attempt 2).** Attempt 2 of the
+    30-minute run (with D41 and D42) failed the memory criterion again: tracker 15,252 -> 16,020 kB (+5.04 %), bridge
+    6,488 -> 8,388 kB (+29.3 %). Both rose once, between 150 and 180 s, and then stayed flat for 27 minutes (no
+    leak pattern). The Jetson runs transparent huge pages in "always" mode with `khugepaged/max_ptes_none` = 511, so
+    khugepaged replaces any 2 MB range of anonymous memory that has one resident page with a full huge page; it passes
+    over all processes about every 9.5 min (179 full scans in 28 h of uptime), so each process steps by up to 2 MB at
+    a random time in the run. A 5.5-minute probe without a viewer and a 12-minute bridge-only probe showed no step and
+    `AnonHugePages` 0 (`logs/jetson/thp_probe/`; no evidence either way; the collapse counter of the system rose by 1 during the second probe).
+    The programs now call `prctl(PR_SET_THP_DISABLE)` at start (`src/common/no_thp.hpp`, Linux only, no privileges;
+    `/proc/<pid>/status` shows `THP_enabled: 0`); this also removes the stall while khugepaged copies a range. The
+    system setting was not changed (no `sudo`). The long test now also writes `mem_detail.csv` (resident memory by kind
+    and `AnonHugePages`, every 30 s) as a diagnostic; the criterion and its evaluation are unchanged. Attempt 3 (the last
+    allowed) passed: tracker and bridge +0.0 % over 30 min, `AnonHugePages` 0 (`logs/long_30min/`).
+
+## Flow module (2026-11-20, user request)
+
+48. **Addition - pose hypotheses from outside.** Not in the task: `TrackerCore::set_hints` / `try_hints` (DESIGN
+    section 13), the tool `trk_hint_eval`, and the unit test `synth_pose_hints` (a hypothesis 20 mm / 12 degrees off is
+    accepted in the first cycle in 20 of 20 poses; a hypothesis 0.29 m away is never accepted and the search that
+    follows finds the pose in 20 of 20). The tracker still links only Eigen, nanoflann and the capture library; the
+    network that makes the hypotheses is in `../flow` (Python, PyTorch) and is not part of the tracker programs.
+    Without hints the search cycle is the same code path as before (the 20 earlier tests pass unchanged).
+

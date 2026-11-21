@@ -1,0 +1,3 @@
+viewer: connects 1 (1 = no reconnect needed), tracker instances seen 2: c0127fa0080ed320: 1580 poses, gaps 0, 0464337a96d2b417: 1796 poses, gaps 0
+bridge: attaches 2, poses read 3536, sent 3376
+RESULT PASS

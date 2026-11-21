@@ -1,0 +1,8 @@
+tracker_rss_kb: 15252 kB at 120 s -> 15252 kB at 1740 s (+0.0 %)
+bridge_rss_kb: 6476 kB at 120 s -> 6476 kB at 1740 s (+0.0 %)
+viewer_rss_kb: 49920 kB at 120 s -> 27952 kB at 1740 s (-44.0 %)
+tracker: cycles 162818, pairs used 162818 of 162916, skipped 98, cycle p99 13.15 ms; bridge: poses read/sent/dropped 162818/161676/0; viewer: poses 161676, clouds 46002, connects 1
+capture: A dropped 0 overflows 0, B dropped 0 overflows 0
+tracker.log ended normally
+bridge.log ended normally
+RESULT PASS

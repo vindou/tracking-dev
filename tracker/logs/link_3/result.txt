@@ -1,0 +1,2 @@
+viewer received 5412 of 5412 poses published while connected (100.00 %), gaps 0, out of order 0; bridge dropped poses 0 clouds 0; tracker cycles 6190; connects 1
+RESULT PASS

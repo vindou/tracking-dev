@@ -40,12 +40,14 @@ bool TrackerCore::init(const TrackerConfig& cfg, std::string& err) {
         kptr_[s] = kernels_.back().get();
     }
     const int maxp = std::min<int>(2 * std::max(cfg.max_points_per_camera, cfg.max_points_per_camera_search), 131072);
-    pts_.resize(std::size_t(maxp));
-    pcam_.resize(std::size_t(maxp));
-    fpts_.resize(std::size_t(maxp));
-    fcam_.resize(std::size_t(maxp));
+    // assign (not resize): Eigen vectors are not initialized by resize, so the pages would become resident only when
+    // the loop first writes them (page faults in the loop, memory growth during the run). Written once here instead.
+    pts_.assign(std::size_t(maxp), Eigen::Vector3d::Zero());
+    pcam_.assign(std::size_t(maxp), 0);
+    fpts_.assign(std::size_t(maxp), Eigen::Vector3d::Zero());
+    fcam_.assign(std::size_t(maxp), 0);
     const int maxs = std::min<int>(std::max(cfg.solver_points_track, cfg.solver_points_search), int(kCloudMaxPoints));
-    spts_.resize(std::size_t(maxs));
+    spts_.assign(std::size_t(maxs), Eigen::Vector3d::Zero());
     scam_.resize(std::size_t(maxs));
     sidx_.resize(std::size_t(maxs));
     fflag_.resize(std::size_t(maxp));
@@ -597,6 +599,51 @@ bool TrackerCore::search_step(int64_t t_start, PoseRecord& pose) {
     return accepted;
 }
 
+void TrackerCore::set_hints(const Mat4* T_rig_obj, int n, bool in_order) {
+    hints_in_order_ = in_order;
+    n_hints_ = std::max(0, std::min(n, int(kMaxHints)));
+    for (int i = 0; i < n_hints_; i++) hints_[i] = T_rig_obj[i];
+}
+
+// External pose hypotheses (flow module): full ICP from each on the points near its position, the fit check of the
+// search (no jump test); the best passing one (fitness minus free-space violations, then RMSE) is accepted.
+bool TrackerCore::try_hints(PoseRecord& pose) {
+    const int n = n_hints_;
+    n_hints_ = 0;
+    hints_tried_ = 0;
+    if (nf_ < cfg_.min_points) return false;
+    const ICPConvergenceCriteria crit(cfg_.rel_fitness, cfg_.rel_rmse, cfg_.max_iterations);
+    const double radius = model_.radius + 0.02;
+    bool have = false;
+    double best_score = -1, best_rmse = 1e9;
+    Vec3 best_c = Vec3::Zero();
+    for (int i = 0; i < n; i++) {
+        const Vec3 c = hints_[i].block<3, 3>(0, 0) * model_.centroid + hints_[i].block<3, 1>(0, 3);
+        select_points_near(c, radius, cfg_.solver_points_search);
+        hints_tried_++;
+        if (ns_ < cfg_.min_points) continue;
+        const RegistrationResultPrealloc r = RegistrationICPPrealloc(
+                spts_.data(), std::size_t(ns_), target_, *tree_, cfg_.distances.data(), int(cfg_.distances.size()),
+                inverse_pose(hints_[i]), kptr_, crit, ws_);
+        PoseRecord tmp;
+        std::memset(&tmp, 0, sizeof tmp);
+        evaluate(r, nullptr, tmp, false);
+        const double score = r.fitness - double(tmp.free_space_violation);
+        if (tmp.valid && (score > best_score || (score == best_score && r.inlier_rmse < best_rmse))) {
+            best_ = r;
+            have = true;
+            best_score = score;
+            best_rmse = r.inlier_rmse;
+            best_c = c;
+            if (hints_in_order_) break;
+        }
+    }
+    if (!have) return false;
+    select_points_near(best_c, radius, cfg_.solver_points_search);
+    evaluate(best_, nullptr, pose, false);
+    return pose.valid != 0;
+}
+
 void TrackerCore::process(const cap::PairRecord& rec, const uint16_t* const img[2], PoseRecord& pose, CloudRecord* cloud) {
     const int64_t t0 = mono_ns();
     img_[0] = img[0];
@@ -633,7 +680,10 @@ void TrackerCore::process(const cap::PairRecord& rec, const uint16_t* const img[
     bool icp_ran = false;
     int64_t t4 = t3;
     if (state_ == kStateSearch) {
-        const bool ok = search_step(t3, pose);
+        hints_tried_ = 0;
+        bool ok = n_hints_ > 0 && try_hints(pose);
+        if (ok) search_idx_ = 0;
+        else ok = search_step(t3, pose);
         icp_ran = true;
         t4 = mono_ns();
         if (ok) {

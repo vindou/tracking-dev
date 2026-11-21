@@ -1,0 +1,1 @@
+t5 axis convention: RESULT: single-camera poses differ by more than the limits; closest assumption: camera frame rotated 180 deg about z (x left, y up) -> PASS

@@ -190,7 +190,9 @@ TCP, `TCP_NODELAY`, one client. Each message: header `{u32 magic 'TRKN', u16 typ
 u32 reserved}` (16 bytes), then the payload. Type 1 = pose (payload = pose record). Type 2 = cloud (fixed size:
 `{u32 version, u32 count, u64 pose_seq, f64 center[3]}` then 8192 points `{i16 x, y, z (0.1 mm relative to center),
 u8 inlier, u8 camera}`). Type 3 = bridge status (counters). Send queue with a drop policy: oldest cloud messages first,
-then oldest pose messages; all drops counted.
+then oldest pose messages; all drops counted. The queue (`src/core/send_queue.hpp`) allocates nothing after start: one
+zero-filled slot pool per message type, each large enough for the byte limit, and a fixed ring of entries in arrival
+order (a discarded entry is skipped; the ring is compacted in place when it is full of entries).
 
 ## 11. Record/replay file (T2, T3)
 
@@ -234,3 +236,16 @@ reasons: DEVIATIONS.md; measurements: TEST_REPORT.md):
 | trk_tracker | main (signals), loop, status, 2 ring heartbeats |
 | trk_bridge | main (signals, status line), reader (pose buffer futex wait, cloud `latest()`), network (accept, non-blocking send) |
 | viewer.py | main (display loop, ~30 Hz), receiver (socket, CSV), viser server threads |
+
+## 13. Pose hypotheses from outside (flow module, added 2026-11-20)
+
+`TrackerCore::set_hints(T_rig_from_object[], n)` stores up to 32 pose hypotheses (fixed array, no allocation). In the
+next cycle in search state they are tried before the orientation grid: for each, the points within (model radius +
+20 mm) of its position, the full ICP sequence from the hypothesis, and the fit check of the search (no jump test). The
+best passing one (fitness minus free-space violations, then RMSE) is accepted and the state becomes track. If none
+passes, the normal search runs in the same cycle; without hints the cycle is unchanged. The hypotheses come from
+`../flow` (a learned flow on SE(3)); they only choose where ICP starts, every accepted pose still passes the same
+fit check. The hint ICP runs are not time-sliced in this version (12 hypotheses: about 12 refine steps in one cycle).
+`trk_hint_eval` runs the core on independent static scenes with and without hypotheses (formats in its header).
+The live programs do not call `set_hints` yet (no hint buffer; see `../flow/README.md`, "Not done").
+

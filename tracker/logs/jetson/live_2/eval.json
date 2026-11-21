@@ -1,0 +1,179 @@
+{
+ "run": "live_2",
+ "poses": 5392,
+ "state_fraction": {
+  "search": 1.0,
+  "track": 0.0,
+  "lost": 0.0
+ },
+ "valid_fraction": 0.0,
+ "calc_all_ms": {
+  "p50": 7.7491,
+  "p99": 11.851700000000001,
+  "max": 23.113799999999998,
+  "le_5ms_pct": 2.3182492581602374,
+  "le_2ms_pct": 0.0
+ },
+ "delay_capture_to_publish_ms": {
+  "p50": 19.024032,
+  "p99": 23.890976
+ },
+ "tracker": {
+  "run_s": 70.112,
+  "cycles": 5648,
+  "valid": 0,
+  "search": 5648,
+  "track": 0,
+  "lost": 0,
+  "pairs_used": 5648,
+  "pairs_skipped": 2,
+  "pairs_torn": 0,
+  "capture_published": 5651,
+  "attaches": 1,
+  "clouds": 1598,
+  "cycle_p50_ms": 7.75,
+  "cycle_p99_ms": 12.13,
+  "cycle_max_ms": 23.13,
+  "cycle_le_2ms_pct": 0.0,
+  "cycle_le_5ms_pct": 2.355,
+  "solve_p50_ms": 6.51,
+  "solve_p99_ms": 10.74,
+  "read_p99_ms": 1.04,
+  "delay_p50_ms": 19.05,
+  "delay_p99_ms": 24.05,
+  "rss_kb": 14316,
+  "pose_instance": "a1629a88216947e9"
+ },
+ "capture": {
+  "run_s": 75.066,
+  "sink": "shm",
+  "sink_pairs": 6291,
+  "A": {
+   "serial": "234322070408",
+   "frames": 6746,
+   "dropped": 0,
+   "overflows": 0,
+   "max_fill": 4,
+   "ignored": 0,
+   "after_stop": 0,
+   "short_frames": 0,
+   "callback_errors": 0,
+   "cb_p50_ms": 0.23,
+   "cb_p99_ms": 0.43,
+   "cb_max_ms": 2.0742,
+   "lat_p50_ms": 9.8,
+   "lat_p99_ms": 11.3,
+   "restarts": 0,
+   "restart_failures": 0,
+   "fps_warnings": 0,
+   "period_ms": 11.128325,
+   "eligible": 6291,
+   "paired": 6291,
+   "unpaired": 0,
+   "settle_discards": 450,
+   "domain_discards": 0,
+   "partner_settling_discards": 5,
+   "restart_discards": 0,
+   "timeout_decisions": 0,
+   "period_fallback": 0,
+   "recoveries": 0,
+   "full_opens": 0,
+   "state": "ok"
+  },
+  "B": {
+   "serial": "234322070144",
+   "frames": 6741,
+   "dropped": 0,
+   "overflows": 0,
+   "max_fill": 1,
+   "ignored": 0,
+   "after_stop": 51,
+   "short_frames": 0,
+   "callback_errors": 0,
+   "cb_p50_ms": 0.21,
+   "cb_p99_ms": 0.35,
+   "cb_max_ms": 1.5945,
+   "lat_p50_ms": 9.8,
+   "lat_p99_ms": 11.2,
+   "restarts": 0,
+   "restart_failures": 0,
+   "fps_warnings": 0,
+   "period_ms": 11.128323,
+   "eligible": 6291,
+   "paired": 6291,
+   "unpaired": 0,
+   "settle_discards": 450,
+   "domain_discards": 0,
+   "partner_settling_discards": 0,
+   "restart_discards": 0,
+   "timeout_decisions": 0,
+   "period_fallback": 0,
+   "recoveries": 0,
+   "full_opens": 0,
+   "state": "ok"
+  },
+  "output_delay": {
+   "usual": {
+    "pairs": 6291,
+    "older_p50_ms": 11.3,
+    "older_p99_ms": 12.7,
+    "older_max_ms": 14.1,
+    "newer_p50_ms": 10.0,
+    "newer_p99_ms": 11.4,
+    "newer_max_ms": 12.6
+   },
+   "near_half": {
+    "pairs": 0,
+    "older_p50_ms": -1.0,
+    "older_p99_ms": -1.0,
+    "older_max_ms": -1.0,
+    "newer_p50_ms": -1.0,
+    "newer_p99_ms": -1.0,
+    "newer_max_ms": -1.0
+   }
+  },
+  "process": {
+   "rss_kb_end": 45120,
+   "rss_kb_after_first_recovery": 0,
+   "hw_resets_requested": 0,
+   "hw_reset_failures": 0,
+   "hw_recovery_timeouts": 0
+  },
+  "matcher": {
+   "pairs": 6291,
+   "partner_changes": 0,
+   "dt_min_ms": 0.6492,
+   "dt_median_ms": 1.27,
+   "dt_max_ms": 1.7729,
+   "period_ms": 11.128324,
+   "tolerance_ms": 5.564162,
+   "order_errors": 0,
+   "csv_overflows": 0
+  }
+ },
+ "pair_use_pct": 99.947,
+ "capture_counters": {
+  "A": {
+   "dropped": 0,
+   "overflows": 0,
+   "restarts": 0,
+   "callback_errors": 0
+  },
+  "B": {
+   "dropped": 0,
+   "overflows": 0,
+   "restarts": 0,
+   "callback_errors": 0
+  }
+ },
+ "tegrastats": {
+  "cpu_mean_pct": 20.1,
+  "tj_max_c": 44.156,
+  "ram_used_mb_max": 868
+ },
+ "kernel": {
+  "new_lines": 84,
+  "usb_error_lines": 0,
+  "examples": []
+ }
+}

@@ -1,0 +1,4 @@
+map: 1788 occupied cells; plane points in occupied cells 173557/173557 (100.0 %), object points 0/4093 (0.0 %)
+without map: 0 valid of 200, first track at pair None, valid poses off by > 5 mm/5 deg: 0, max position error nan mm
+with map:    143 valid of 200, first track at pair 57, valid poses off by > 5 mm/5 deg: 0, max position error 0.57 mm
+t6: PASS

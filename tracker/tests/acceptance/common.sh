@@ -13,7 +13,7 @@ mkdir -p "$LOGROOT" "$DATA"
 mon_start() {
     local d=$1; mkdir -p "$d"
     journalctl -k -n 0 --show-cursor --no-pager 2>/dev/null | sed -n 's/^-- cursor: //p' > "$d/.cursor"
-    tegrastats --interval 1000 --logfile "$d/tegrastats.log" & echo $! > "$d/.tegra_pid"
+    tegrastats --interval 1000 --logfile "$d/tegrastats.log" > /dev/null 2>&1 < /dev/null & echo $! > "$d/.tegra_pid"
     echo "start_uptime_s=$(cut -d' ' -f1 /proc/uptime)" > "$d/meta.txt"
 }
 mon_stop() {
