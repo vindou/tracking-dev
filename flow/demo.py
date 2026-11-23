@@ -16,6 +16,8 @@ Playback is paced by real time (network time on the Jetson from the measured tim
 measured on this Mac) at a selectable fraction: "real time" plays the roughly quarter second as it would run. The table and the verdicts are read from results.json
 (tracker runs); only the animation is computed live, with the same seeds as the evaluation."""
 import argparse
+import base64
+import io
 import json
 import re
 import threading
@@ -23,6 +25,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 from plotly.colors import sample_colorscale
 import torch
 import trimesh
@@ -45,6 +48,7 @@ CAM_NAME = ("camera 1 (D435i_1, -Y side)", "camera 2 (D435i_2, +Y side)")
 CARD = ("position:fixed;z-index:20;pointer-events:none;background:rgba(255,255,255,0.94);border-radius:8px;"
         "box-shadow:0 1px 6px rgba(0,0,0,0.25);padding:10px 14px;font-size:13px;line-height:1.42;color:#1c1c1c;")
 VIRIDIS = sample_colorscale("Viridis", [i / 255 for i in range(256)])
+VIRIDIS_RGB = np.array([[int(v) for v in re.findall(r"\d+", c)[:3]] for c in VIRIDIS], np.uint8)
 
 
 def md_html(md):
@@ -76,9 +80,9 @@ def swatch(rgb, text):
     return f'<span style="color:rgb{tuple(rgb)};font-weight:700">■ {text}</span>'
 
 
-def field_svg(pid, z, u, v, zmax, half, unit, title, xlabel, ylabel, circle=None, dots=None, size=230):
+def field_svg(pid, z, u, v, zmax, half, unit, title, xlabel, ylabel, dots=None, size=230):
     """One slice of the field as SVG: cells coloured by z (viridis, 0..zmax), a white arrow per cell in the direction
-    (u, v), a cross at the reference, optionally a dotted circle (radius in axis units) and dots (axis units)."""
+    (u, v), a cross at the reference, optionally dots (axis units)."""
     G = z.shape[0]
     L, T, cell = 46, 22, size / G
     span = size - cell                                            # cell centres run from the first to the last cell
@@ -93,19 +97,17 @@ def field_svg(pid, z, u, v, zmax, half, unit, title, xlabel, ylabel, circle=None
          f'<linearGradient id="cb{pid}" x1="0" y1="1" x2="0" y2="0">'
          + "".join(f'<stop offset="{k / 8}" stop-color="{VIRIDIS[int(k / 8 * 255)]}"/>' for k in range(9)) + "</linearGradient></defs>",
          f'<text x="{L}" y="12" font-size="11" font-weight="700">{title}</text>']
-    for r in range(G):
-        for c in range(G):
-            e.append(f'<rect x="{X(g[c]) - cell / 2:.1f}" y="{Y(g[r]) - cell / 2:.1f}" width="{cell + 0.4:.1f}" height="{cell + 0.4:.1f}" '
-                     f'fill="{VIRIDIS[zi[r, c]]}"/>')
+    # the cells as one G x G image (no seams between cells), first row at the bottom
+    png = io.BytesIO()
+    Image.fromarray(VIRIDIS_RGB[zi[::-1]], "RGB").save(png, "PNG")
+    e.append(f'<image x="{L}" y="{T}" width="{size}" height="{size}" preserveAspectRatio="none" style="image-rendering:pixelated" '
+             f'href="data:image/png;base64,{base64.b64encode(png.getvalue()).decode()}"/>')
     for r in range(G):
         for c in range(G):
             if n[r, c] > 1e-9:
                 dx, dy = u[r, c] / n[r, c] * cell * 0.38, -v[r, c] / n[r, c] * cell * 0.38
                 e.append(f'<line x1="{X(g[c]) - dx:.1f}" y1="{Y(g[r]) - dy:.1f}" x2="{X(g[c]) + dx:.1f}" y2="{Y(g[r]) + dy:.1f}" '
                          f'stroke="white" stroke-width="0.9" marker-end="url(#ah{pid})"/>')
-    if circle:
-        e.append(f'<circle cx="{X(0):.1f}" cy="{Y(0):.1f}" r="{circle / (2 * half) * span:.1f}" fill="none" stroke="white" '
-                 'stroke-width="1.6" stroke-dasharray="4 3"/>')
     e.append(f'<path d="M{X(0) - 5},{Y(0) - 5} L{X(0) + 5},{Y(0) + 5} M{X(0) - 5},{Y(0) + 5} L{X(0) + 5},{Y(0) - 5}" stroke="white" stroke-width="2"/>')
     if dots is not None:
         for x, y in dots:
@@ -252,11 +254,11 @@ def main():
         a_ = field_svg("p", fr["pos_mm"][frame], fr["pos_u"][frame], fr["pos_v"][frame], float(fr["pos_mm"].max()), 100, "mm",
                        f"Translation field, t = {t:.3g}", "rig x", "rig y", dots=dp)
         b_ = field_svg("r", fr["rot_deg"][frame], fr["rot_u"][frame], fr["rot_v"][frame], float(fr["rot_deg"].max()), 170, "deg",
-                       f"Rotation field, t = {t:.3g}", "about object x", "about object y", circle=70, dots=dr)
+                       f"Rotation field, t = {t:.3g}", "about object x", "about object y", dots=dr)
         cap = ('<div style="width:650px;font-size:11.5px;line-height:1.35">Two 2-D slices of the learned field through the true pose '
                '(white cross). Colour: size of the motion the network predicts is still needed; arrows: its direction in the slice. '
-               'Left: rotation at the truth, position varied. Right: position at the truth, rotation varied (dotted circle: 70°, the '
-               'training range). <span style="color:#ff3b6b;font-weight:700">●</span> this scene\'s hypotheses, projected onto the '
+               'Left: rotation at the truth, position varied. Right: position at the truth, rotation varied (the rotation flow was '
+               'trained on offsets up to 70°). <span style="color:#ff3b6b;font-weight:700">●</span> this scene\'s hypotheses, projected onto the '
                'slice (they are not in it: each also has an error in the other four dimensions).</div>')
         plots.set("plots", f'<div style="display:flex;gap:6px">{a_}{b_}</div>{cap}')
 

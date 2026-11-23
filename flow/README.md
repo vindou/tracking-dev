@@ -83,11 +83,76 @@ and cylinders. None of the noise parameters was fitted to recordings of the real
 .venv/bin/python -m flow.make_data eval --per-cat 80         # 400 scenes, 650 MB
 .venv/bin/python -m flow.train --steps 9000 --batch 96       # about 1 h on an M2
 .venv/bin/python -m flow.evaluate                            # hypotheses, tracker runs, table; needs tracker/build-mac
+.venv/bin/python -m flow.precompute_fields                   # flow-field slices of the demo, about 1 h (optional: the demo computes a missing scene on first view)
 .venv/bin/python -m flow.demo                                # http://localhost:8090
 .venv/bin/python -m flow.export --model flow/runs/a/model.pt # ONNX for TensorRT
 ```
 
 Packages added to `.venv`: torch, onnx, onnxscript. `flow/data/` and `flow/runs/` are not in git.
+
+## RNODE (`rnode.py`, `train_rnode.py`, `infer_rnode.py`, `ablate_rnode.py`, `tests_rnode.py`)
+
+An implementation of RNODE (Finlay et al. 2020, arXiv 2002.02798) on SO(3) x R^3, tried as the training objective.
+**Outcome: it does not improve the tracker result. The network built for it, trained with flow matching alone, is the
+best model so far (327 correct against 318 for `runs/a`).** `runs/a` is still what the demo uses.
+
+| model (+ ICP), 400 scenes | correct / wrong / none |
+|---|---|
+| classical | 231 / 36 / 133 |
+| `runs/a/model.pt` (flow matching, `model.py`) | 318 / 46 / 36 |
+| `runs/rnode/model_fm.pt` (RNODE network, flow matching only, 30,000 steps) | 327 / 44 / 29 |
+| `runs/rnode/model_smooth_fm.pt` (smooth network, flow matching only) | 327 / 46 / 27 |
+| `runs/rnode/model_smooth_rnode.pt` (smooth network + 300 RNODE updates) | 325 / 46 / 29 |
+
+One run and one seed each; differences of a few scenes are not significant.
+
+What is implemented: the augmented system (state, log-determinant, kinetic energy, Jacobian norm), the loss of eq. 17,
+Hutchinson's estimate with one noise vector per batch, fixed-grid RK4 (4 steps). `tests_rnode.py` checks the Jacobian
+terms and the log-determinant against finite differences.
+
+Differences from the paper:
+- The state is a pose. The divergence is the trace of the Jacobian with respect to a body-frame perturbation; the
+  solver is RK4 on the rotation vector of each step.
+- Gradients go through the solver (no adjoint).
+- The base distribution is centred on the true pose (0.6 rad, 40 mm). The likelihood is a training objective only:
+  it cannot be evaluated at inference, where the truth is unknown.
+- The data is the true pose with dequantization noise (0.05 rad, 4 mm).
+- An exact trace (6 vector-Jacobian products, `--exact`) is available in place of Hutchinson's estimate.
+- A flow-matching warm start (`--fm-steps`) and an auxiliary object / clutter loss.
+
+What happened, in order:
+1. From scratch (four attempts, including the paper's settings): no learning. The network learned a drift that did
+   not depend on the state.
+2. Fine-tuning the warm start at batch 32: the model was destroyed in 500 updates (hit rate 68 % to 2 %).
+3. Fine-tuning at 512 samples per update (`--accum 16`): stable, slightly worse.
+4. The same on a network with a continuous Jacobian (`--smooth`: softmax pooling, smoothstep table weights): the
+   likelihood with the 4 training steps improved (-1.559 to -1.611 nats per dimension) but with 16 steps it did not
+   (-1.515 to -1.518), and the hit rate at 1 and 2 solver steps fell (19 % to 5 %, 60 % to 45 %). The model fitted
+   the error of the 4-step solver.
+
+Ablations (`runs/abl/`, `ablate_rnode.py`; 10,000-step warm starts, then 75 updates of 512 samples):
+- The likelihood is close to its floor, the entropy of the dequantization noise (-1.69): the gap is 0.10 to 0.33 at
+  dequantization widths of 1, 3 and 6 times, and 0.20 after 30,000 steps (exact trace, 16 solver steps). There is little to gain.
+- Widening the dequantization noise did not help: RNODE did not improve the likelihood at any width, and the cosine
+  between the gradients of independent batches stayed low (0.03 to 0.09 for the divergence term).
+- The regularizers changed nothing useful: path straightness was the same before and after in every variant (0.9).
+- The smooth network is the only variant RNODE did not degrade. Likely reason (not measured directly): with maximum
+  pooling and trilinear interpolation the divergence jumps where the selected point or cell changes, and the
+  gradient does not contain those jumps.
+- 4 solver steps match 8 in every variant.
+
+The smooth network costs about 7 times more per scene on the Mac CPU (10 s against 1.5 s) for the same tracker
+result. Not timed on the Jetson.
+
+```
+# on the GPU machine (data copied there; see tracker/MACHINE_CHANGES.md)
+python -m flow.train_rnode --run flow/runs/rnode --fm-steps 30000 --steps 0                    # warm start only
+python -m flow.train_rnode --run flow/runs/x --init flow/runs/rnode/model_fm.pt --steps 300 --batch 32 --accum 16 --lr 5e-5 --clip 1e9
+python -m flow.ablate_rnode --model flow/runs/rnode/model_fm.pt --out out.json
+# on the Mac (use --device cpu: the MPS path stalled)
+python -m flow.evaluate --method rnode --model flow/runs/rnode/model_fm.pt --eval flow/data/eval_rnode_fm --device cpu
+python -m flow.tests_rnode
+```
 
 ## Not done
 

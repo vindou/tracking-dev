@@ -176,6 +176,41 @@ def jetson_network_ms(k=32, centers=4, n_orient=32, steps=8, refine=2):
     return JETSON_MS_PER_32 * (5 * k / 32 + (steps + refine) * centers * n_orient / 32)
 
 
+def write_hints(ev, rig, proposer, n_hints):
+    """Runs proposer(index, depth) -> hypotheses dict on every scene of the evaluation set ev; writes hints.bin (for
+    trk_hint_eval) and flow.npz (diagnostics against the truth), prints a summary per kind of scene."""
+    rows, blobs = [], []
+    for i, cat, T, depth, _ in load_eval(ev):
+        h = proposer(i, depth)
+        sel = hint_order(h, n_hints)
+        c = T[:3, :3] @ rig.centroid + T[:3, 3]
+        ep = np.linalg.norm(h["p"] - c, axis=1) * 1000 if len(h["p"]) else np.zeros(0)
+        er = np.array([geom.rot_angle_deg(Th[:3, :3], T[:3, :3]) for Th in h["T"]])
+        good = (ep < 15) & (er < 15)
+        rank = next((r for r, j in enumerate(sel) if good[j]), -1)
+        rows.append(dict(scene=i, cat=cat, k=len(ep), n_good=int(good.sum()), first_good_rank=rank, n_groups=len(h["groups"]),
+                         top_group=len(h["groups"][0]) if h["groups"] else 0,
+                         best_mm=float(ep[good].min()) if good.any() else -1, best_deg=float(er[good].min()) if good.any() else -1,
+                         seed_near=int((np.linalg.norm(h["seeds"] - c, axis=1) < 0.10).sum()) if len(ep) else 0,
+                         center_mm=float(np.linalg.norm(h["centers"] - c, axis=1).min() * 1000) if len(ep) else -1,
+                         t_prep=h["t_prep"], t_flow=h["t_flow"]))
+        blobs.append(np.concatenate([np.stack([h["T"][j] for j in sel]).reshape(-1), np.zeros(16 * (n_hints - len(sel)))])
+                     if sel else np.zeros(16 * n_hints))
+        rows[-1]["n_hints"] = len(sel)
+    ev = Path(ev)
+    with open(ev / "hints.bin", "wb") as f:
+        f.write(b"TRKHINTS" + struct.pack("<III", 1, len(rows), n_hints))
+        for r, b in zip(rows, blobs):
+            f.write(struct.pack("<I", r["n_hints"]) + b.astype("<f8").tobytes())
+    np.savez(ev / "flow.npz", **{k: np.array([r[k] for r in rows]) for k in rows[0]})
+    for cat in scene.CATEGORIES:
+        rs = [r for r in rows if r["cat"] == cat]
+        print(f"{cat:11s} seed within 0.10 m {np.mean([r['seed_near'] > 0 for r in rs]):.2f}  position stage within 20 mm "
+              f"{np.mean([0 <= r['center_mm'] < 20 for r in rs]):.2f}  any hypothesis within 15 mm / 15 deg "
+              f"{np.mean([r['n_good'] > 0 for r in rs]):.2f}  in the {n_hints} hints {np.mean([r['first_good_rank'] >= 0 for r in rs]):.2f}  "
+              f"first {np.mean([r['first_good_rank'] == 0 for r in rs]):.2f}  flow ms p50 {1e3 * np.median([r['t_flow'] for r in rs]):.0f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="flow/runs/a/model.pt")
@@ -190,36 +225,8 @@ def main():
     dev = torch.device(a.device)
     net = load_model(a.model, dev)
     rig = scene.Rig()
-    rows, blobs = [], []
-    for i, cat, T, depth, _ in load_eval(a.eval):
-        h = propose(net, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, steps=a.steps, seed=i)
-        sel = hint_order(h, a.hints)
-        c = T[:3, :3] @ rig.centroid + T[:3, 3]
-        ep = np.linalg.norm(h["p"] - c, axis=1) * 1000 if len(h["p"]) else np.zeros(0)
-        er = np.array([geom.rot_angle_deg(Th[:3, :3], T[:3, :3]) for Th in h["T"]])
-        good = (ep < 15) & (er < 15)
-        rank = next((r for r, j in enumerate(sel) if good[j]), -1)
-        rows.append(dict(scene=i, cat=cat, k=len(ep), n_good=int(good.sum()), first_good_rank=rank, n_groups=len(h["groups"]),
-                         top_group=len(h["groups"][0]) if h["groups"] else 0,
-                         best_mm=float(ep[good].min()) if good.any() else -1, best_deg=float(er[good].min()) if good.any() else -1,
-                         seed_near=int((np.linalg.norm(h["seeds"] - c, axis=1) < 0.10).sum()) if len(ep) else 0,
-                         center_mm=float(np.linalg.norm(h["centers"] - c, axis=1).min() * 1000) if len(ep) else -1,
-                         t_prep=h["t_prep"], t_flow=h["t_flow"]))
-        blobs.append(np.concatenate([np.stack([h["T"][j] for j in sel]).reshape(-1), np.zeros(16 * (a.hints - len(sel)))])
-                     if sel else np.zeros(16 * a.hints))
-        rows[-1]["n_hints"] = len(sel)
-    ev = Path(a.eval)
-    with open(ev / "hints.bin", "wb") as f:
-        f.write(b"TRKHINTS" + struct.pack("<III", 1, len(rows), a.hints))
-        for r, b in zip(rows, blobs):
-            f.write(struct.pack("<I", r["n_hints"]) + b.astype("<f8").tobytes())
-    np.savez(ev / "flow.npz", **{k: np.array([r[k] for r in rows]) for k in rows[0]})
-    for cat in scene.CATEGORIES:
-        rs = [r for r in rows if r["cat"] == cat]
-        print(f"{cat:11s} seed within 0.10 m {np.mean([r['seed_near'] > 0 for r in rs]):.2f}  position stage within 20 mm "
-              f"{np.mean([0 <= r['center_mm'] < 20 for r in rs]):.2f}  any hypothesis within 15 mm / 15 deg "
-              f"{np.mean([r['n_good'] > 0 for r in rs]):.2f}  in the {a.hints} hints {np.mean([r['first_good_rank'] >= 0 for r in rs]):.2f}  "
-              f"first {np.mean([r['first_good_rank'] == 0 for r in rs]):.2f}  flow ms p50 {1e3 * np.median([r['t_flow'] for r in rs]):.0f}")
+    write_hints(a.eval, rig, lambda i, depth: propose(net, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, steps=a.steps, seed=i),
+                a.hints)
 
 
 if __name__ == "__main__":

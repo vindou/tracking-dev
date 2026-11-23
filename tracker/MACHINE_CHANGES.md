@@ -20,6 +20,15 @@ Unchanged: `~/capture/` (capture program from the earlier task; only its existin
 Shared-memory objects created while programs run (removed when they stop): `/d435_pairs` (capture), `/trk_pose`,
 `/trk_cloud` (tracker).
 
+## linbox01 (`chang940@linbox01`, shared RTX 4090; 2026-11-22 and 23, RNODE training)
+
+| Path | What | Size | Remove with |
+|---|---|---|---|
+| `~/tracking-flow/` | copy of the `flow` sources needed for training, a Python 3.12 virtual environment with `torch` 2.15.0+cu132 (`.venv/`), the 12 training shards (`flow/data/train`, copied with `scp -r`), the closest-point table, all training runs (`flow/runs/`), run scripts and logs | 6.5 GB | `rm -rf ~/tracking-flow` |
+
+Nothing outside `~/tracking-flow/` was changed. The GPU is shared: two early runs at batch 128 ran out of memory
+while another user's job was on it.
+
 ## Mac (repository `tracking-dev/`)
 
 | Path | What | In git |
@@ -32,6 +41,7 @@ Shared-memory objects created while programs run (removed when they stop): `/d43
 | `viewer/demo_logs/` | logs of the demo runs (50 MB) | ignored |
 | `.venv/` (2026-11-20, flow module) | added `torch` 2.15.0, `onnx`, `onnxscript` and their dependencies (`sympy`, `networkx`, `mpmath`, `filelock`, `fsspec`, `protobuf`, `ml_dtypes`, `onnx_ir`) | ignored |
 | `flow/` | flow module (source in git); `flow/data/` (synthetic training and evaluation scenes, about 1.7 GB) and `flow/runs/` (trained model, ONNX files) | source yes, data and runs ignored |
+| `flow/data/rnode_table.npy`, `flow/data/eval_rnode*`, `flow/data/eval_smooth_*`, `flow/runs/rnode/`, `flow/runs/abl/` (2026-11-23, RNODE) | closest-point table (48 MB), evaluation folders (links to `flow/data/eval` plus hint files), models copied back from linbox01, ablation results | ignored |
 | `.gitignore` | entries for `.venv/`, `third_party_src/`, `viewer/poses.csv`, `viewer/demo_logs/` | yes |
 
 Note: `.gitignore` also ignores `*.log` and `*.out`, so most files in `tracker/logs/` would not be committed as they
