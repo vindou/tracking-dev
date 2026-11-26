@@ -106,14 +106,17 @@ def main():
     ap.add_argument("--device", default="")
     ap.add_argument("--method", default="fm", choices=("fm", "rnode"), help="flow matching model (flow.infer) or RNODE model")
     ap.add_argument("--solver-steps", type=int, default=4, help="RK4 steps of the RNODE model")
+    ap.add_argument("--infer-args", default="", help="more arguments for flow.infer_rnode, e.g. '--solver euler --verifier X'")
+    ap.add_argument("--skip-infer", action="store_true", help="use the hints.bin already in the evaluation folder (made on another machine)")
     a = ap.parse_args()
     ev = (ROOT / a.eval).resolve()
     tool = ROOT / "tracker/build-mac/trk_hint_eval"
     cmd = [sys.executable, "-m", "flow.infer_rnode" if a.method == "rnode" else "flow.infer", "--model", a.model, "--eval", str(ev),
            "--k", str(a.k), "--hints", str(a.hints), "--centers", str(a.centers), "--orient", str(a.orient)]
     if a.method == "rnode":
-        cmd += ["--solver-steps", str(a.solver_steps)]
-    subprocess.run(cmd + (["--device", a.device] if a.device else []), check=True, cwd=ROOT)
+        cmd += ["--solver-steps", str(a.solver_steps)] + a.infer_args.split()
+    if not a.skip_infer:
+        subprocess.run(cmd + (["--device", a.device] if a.device else []), check=True, cwd=ROOT)
     if not (ev / "baseline.csv").exists():
         subprocess.run([tool, "--scenes", ev / "scenes.bin", "--out", ev / "baseline.csv"], check=True, cwd=ROOT / "tracker")
     subprocess.run([tool, "--scenes", ev / "scenes.bin", "--hints", ev / "hints.bin", "--baseline", "0", "--out", ev / "hints.csv"],

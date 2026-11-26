@@ -23,12 +23,20 @@ SHARD = 2000
 _rig = None
 
 
+_cats = None            # train --cats: the kinds of scene to draw from (None: the random mix of scene.make_scene)
+
+
+def _init_cats(cats):
+    global _cats
+    _cats = cats
+
+
 def _train_scene(seed):
     global _rig
     if _rig is None:
         _rig = scene.Rig()
     rng = np.random.default_rng(seed)
-    T, depth, labels, _ = scene.make_scene(_rig, rng)
+    T, depth, labels, _ = scene.make_scene(_rig, rng, scene.CATEGORIES[_cats[rng.integers(len(_cats))]] if _cats else None)
     P, C, L = _rig.cloud(depth, labels=labels)
     c = T[:3, :3] @ _rig.centroid + T[:3, 3]
     d = P - c.astype(np.float32)
@@ -45,7 +53,7 @@ def _train_scene(seed):
 def train(a):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    with Pool(a.procs) as pool:
+    with Pool(a.procs, initializer=_init_cats, initargs=(a.cats.split(",") if a.cats else None,)) as pool:
         for s in range(0, a.n, SHARD):
             f = out / f"shard_{a.seed}_{s // SHARD:04d}.npz"
             if f.exists():
@@ -106,6 +114,7 @@ if __name__ == "__main__":
     t.add_argument("--n", type=int, default=40000)
     t.add_argument("--out", default="flow/data/train")
     t.add_argument("--seed", type=int, default=1)
+    t.add_argument("--cats", default="", help="only these kinds of scene, e.g. hand,everything (default: the random mix)")
     t.add_argument("--procs", type=int, default=8)
     e = sub.add_parser("eval")
     e.add_argument("--per-cat", type=int, default=80)

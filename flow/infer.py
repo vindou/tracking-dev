@@ -161,8 +161,12 @@ def propose(net, rig, depth, dev, k=32, centers=4, n_orient=32, steps=8, refine=
 
 
 def hint_order(h, n):
-    """The hypotheses to hand to the tracker: the best member of each group, largest group first."""
-    return [g[0] for g in h["groups"]][:n]
+    """The hypotheses to hand to the tracker: the best member of each group, largest group first. With verifier
+    scores (infer_rnode --verifier): highest score first, and none below the minimum score."""
+    reps = [g[0] for g in h["groups"]]
+    if h.get("score") is not None:
+        reps = sorted((j for j in reps if h["score"][j] >= h["min_score"]), key=lambda j: -h["score"][j])
+    return reps[:n]
 
 
 # One evaluation of the network on the Jetson Orin Nano (TensorRT 10.3, fp16, 512 points per hypothesis), measured with

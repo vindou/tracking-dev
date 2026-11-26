@@ -26,6 +26,16 @@ Shared-memory objects created while programs run (removed when they stop): `/d43
 |---|---|---|---|
 | `~/tracking-flow/` | copy of the `flow` sources needed for training, a Python 3.12 virtual environment with `torch` 2.15.0+cu132 (`.venv/`), the 12 training shards (`flow/data/train`, copied with `scp -r`), the closest-point table, all training runs (`flow/runs/`), run scripts and logs | 6.5 GB | `rm -rf ~/tracking-flow` |
 
+Added on 2026-11-23 and 24 (encoder, verifier and training experiments), all inside `~/tracking-flow/`, which is now
+14 GB: packages `open3d` 0.20.0 and `trimesh` 5.2.2 in `.venv/`; `models/` and `tracker/config/tracker.json` (copies,
+for scene generation); generated data `flow/data/train2` (48,000 scenes), `train2a` (links into `train2`),
+`train_hard` (24,000), `eval`, `eval2` and `eval_*` result folders; runs `flow/runs/{lpn, b_seed1, verifier, t_*,
+litept_t, litept_s}`; `queue_runner2.sh`, `queue.txt`, `queue.log` (one training job at a time).
+
+Added on 2026-11-24 (LitePT speed work), also inside `~/tracking-flow/`: `bench_all.sh`, `bench2.sh`, `bench3.sh`,
+`wait_gpu.sh` (waits for free GPU memory), `bench*.jsonl`, `bench*.log`, `wait.log`, `eval_*.log`, `queue.txt.bak`,
+run `flow/runs/litept_t_rig`, result folders `flow/data/eval_e2_litept_t*`. No package was installed.
+
 Nothing outside `~/tracking-flow/` was changed. The GPU is shared: two early runs at batch 128 ran out of memory
 while another user's job was on it.
 
@@ -42,6 +52,11 @@ while another user's job was on it.
 | `.venv/` (2026-11-20, flow module) | added `torch` 2.15.0, `onnx`, `onnxscript` and their dependencies (`sympy`, `networkx`, `mpmath`, `filelock`, `fsspec`, `protobuf`, `ml_dtypes`, `onnx_ir`) | ignored |
 | `flow/` | flow module (source in git); `flow/data/` (synthetic training and evaluation scenes, about 1.7 GB) and `flow/runs/` (trained model, ONNX files) | source yes, data and runs ignored |
 | `flow/data/rnode_table.npy`, `flow/data/eval_rnode*`, `flow/data/eval_smooth_*`, `flow/runs/rnode/`, `flow/runs/abl/` (2026-11-23, RNODE) | closest-point table (48 MB), evaluation folders (links to `flow/data/eval` plus hint files), models copied back from linbox01, ablation results | ignored |
+| `.venv/` (2026-11-23) | added `pypdf` (to read a paper) | ignored |
+| `flow/data/eval2/`, `flow/data/eval_e2_*`, `flow/data/eval_fm_euler*`, `flow/runs/verifier/` (2026-11-24) | 1,600-scene evaluation set (2.6 GB), one result folder per evaluated configuration (links plus hint files), verifier model copied back from linbox01; `flow/data/` is now 4.2 GB | ignored |
+| `.venv/` (2026-11-24, animations in `flow/anim/`; they also read fonts and run `latex` from the existing TeX Live, nothing installed there) | added `manim` 0.22.1 (Manim Community) and its dependencies: `av`, `beautifulsoup4`, `cloup`, `Cython`, `decorator`, `glcontext`, `isosurfaces`, `ManimPango`, `mapbox_earcut`, `moderngl`, `moderngl-window`, `pycairo`, `pydub`, `pyglet`, `pyglm`, `pyobjc-core`, `pyobjc-framework-Cocoa`, `scipy`, `screeninfo`, `skia-pathops`, `soupsieve`, `srt`, `svgelements`, `watchdog`. No installed package changed version. Nothing system-wide: ffmpeg, cairo, pango and LaTeX were already present. `.venv/` is now 1.5 GB | ignored |
+| `flow/anim/media/` (2026-11-24) | rendered animation videos and manim's intermediate files | ignored |
+| `flow/data/eval_demo/` (2026-11-25) | proposals of the frozen model (baseline network + verifier at 0.85) made on the Mac for the 1,600 scenes, tracker results, and the demo's cache of field plots (`fields/`, grows as scenes are viewed) | ignored |
 | `.gitignore` | entries for `.venv/`, `third_party_src/`, `viewer/poses.csv`, `viewer/demo_logs/` | yes |
 
 Note: `.gitignore` also ignores `*.log` and `*.out`, so most files in `tracker/logs/` would not be committed as they

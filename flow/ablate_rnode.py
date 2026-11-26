@@ -24,11 +24,9 @@ from .model import POS_SCALE
 def load(path, dev):
     ck = torch.load(path, map_location=dev)
     cfg = ck["config"]
-    rnode.SMOOTH = bool(cfg.get("smooth", False))
     rnode.DEQ_ROT, rnode.DEQ_POS = cfg["deq_rot"], cfg["deq_pos"]
-    net = rnode.RNet(ck["width"]).to(dev)
-    net.load_state_dict(ck["model"])
-    return net.eval(), cfg
+    rnode.SIGMA_ROT, rnode.SIGMA_POS = cfg.get("sigma_rot", rnode.SIGMA_ROT), cfg.get("sigma_pos", rnode.SIGMA_POS)
+    return rnode.net_from_checkpoint(ck, dev), cfg
 
 
 def batches(d, n, B, dev, g):

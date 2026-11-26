@@ -22,7 +22,8 @@ from .model import POS_SCALE
 
 
 def load(data, have=0):
-    files = sorted(glob.glob(f"{data}/shard_*.npz"))
+    """data: one folder of shards or several separated by commas (the held-out scenes are the first of the first)."""
+    files = [f for d in data.split(",") for f in sorted(glob.glob(f"{d}/shard_*.npz"))]
     if len(files) <= have:
         return None
     z = [np.load(f) for f in files]
@@ -69,7 +70,9 @@ def validate(net, table, d, idx, dev, solver_steps, exact=False, samples=16):
         acc["n"].append(n.detach())
         rep = torch.arange(B, device=dev).repeat_interleave(samples)
         qb, pb = rnode.sample_base(q1[rep], p1[rep], g)
-        qg, pg = rnode.generate(net, table, P[rep], cam[rep], qb, pb, solver_steps)
+        gen = [rnode.generate(net, table, P[r], cam[r], qb[j:j + 256], pb[j:j + 256], solver_steps)      # 256 at a time: memory
+               for j, r in ((j, rep[j:j + 256]) for j in range(0, len(rep), 256))]
+        qg, pg = torch.cat([x[0] for x in gen]), torch.cat([x[1] for x in gen])
         er = geom.qlog(geom.qmul(geom.qconj(qg), q1[rep])).norm(dim=-1).rad2deg()
         ep = (pg - p1[rep]).norm(dim=-1) * 1000
         far = geom.qlog(geom.qmul(geom.qconj(qb), q1[rep])).norm(dim=-1).rad2deg() > 45
@@ -112,6 +115,22 @@ def main():
     ap.add_argument("--fm-lr", type=float, default=1e-3)
     ap.add_argument("--init", default="", help="checkpoint to start from")
     ap.add_argument("--accum", type=int, default=1, help="batches per RNODE update (gradients summed)")
+    ap.add_argument("--encoder", default="pointnet", choices=("pointnet", "lpn", "litept_s", "litept_t", "litept_s_rig", "litept_t_rig"),
+                    help="point encoder: PointNet-style (RNet), Lean Point Networks (LPNet), LitePT (litept.LitePT)")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--gate", action="store_true", help="pointnet encoder: the object / clutter output weights the pooling")
+    ap.add_argument("--time-sampling", default="uniform", choices=("uniform", "logitnormal", "beta"),
+                    help="flow-matching time: uniform; sigmoid of a standard normal (Esser et al. 2024); or more weight "
+                         "at the base end, t = 1 - 0.999 (1 - s), s ~ Beta(1.5, 1) (Black et al. 2024, pi0)")
+    ap.add_argument("--sigma-rot", type=float, default=rnode.SIGMA_ROT, help="width of the base around the truth, rad")
+    ap.add_argument("--sigma-pos", type=float, default=rnode.SIGMA_POS, help="width of the base, POS_SCALE units")
+    ap.add_argument("--source-uniform", type=float, default=0.0,
+                    help="flow-matching phase: share of base samples with a uniformly random rotation (the starts of "
+                         "the inference are spread over all rotations)")
+    ap.add_argument("--loss-norm", action="store_true",
+                    help="flow-matching loss with the rotation and position parts divided by the widths of the base")
+    ap.add_argument("--weight-decay", type=float, default=0.0, help="AdamW weight decay in the flow-matching phase (0: Adam)")
+    ap.add_argument("--ema", default="0.999,0.9999", help="decays of the weight averages kept next to the model")
     ap.add_argument("--smooth", action="store_true", help="ablation: smooth pooling and table interpolation (rnode.SMOOTH)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
@@ -122,17 +141,39 @@ def main():
         return
     rnode.DEQ_ROT, rnode.DEQ_POS = a.deq_rot, a.deq_pos
     rnode.SMOOTH = a.smooth
+    rnode.SIGMA_ROT, rnode.SIGMA_POS = a.sigma_rot, a.sigma_pos
     run = Path(a.run)
     run.mkdir(parents=True, exist_ok=True)
     dev = torch.device(a.device)
-    torch.manual_seed(0)
+    torch.manual_seed(a.seed)
     torch.backends.cuda.matmul.allow_tf32 = True          # TF32 products on the GPU (about 1e-3 relative; faster)
     torch.backends.cudnn.allow_tf32 = True
     table = torch.from_numpy(np.load(a.table)).to(dev)
     d = load(a.data)
     S = len(d["n"])
     val_idx = torch.arange(a.val)
-    net = rnode.RNet(a.width).to(dev)
+    net = rnode.make_net(a.width, a.encoder, a.gate).to(dev)
+    decays = [float(x) for x in a.ema.split(",") if x]
+    ema = {str(dc): {k: v.detach().clone() for k, v in net.named_parameters()} for dc in decays}
+
+    @torch.no_grad()
+    def ema_update(step):
+        for dc in decays:
+            w = min(dc, (1 + step) / (10 + step))
+            for k, v in net.named_parameters():
+                ema[str(dc)][k].lerp_(v, 1 - w)
+
+    @torch.no_grad()
+    def with_weights(sd, fn):
+        """fn() with the parameters replaced by sd, then restored."""
+        keep = {k: v.detach().clone() for k, v in net.named_parameters()}
+        for k, v in net.named_parameters():
+            v.copy_(sd[k])
+        try:
+            return fn()
+        finally:
+            for k, v in net.named_parameters():
+                v.copy_(keep[k])
     print(f"{sum(p.numel() for p in net.parameters()) / 1e6:.2f} M parameters, device {dev}, RK4 steps {a.solver_steps}, "
           f"lambda_K {a.lambda_k}, lambda_J {a.lambda_j}", flush=True)
     cfg = vars(a)
@@ -143,7 +184,11 @@ def main():
         r.update(phase=phase, step=step, min=(time.time() - t0) / 60)
         if step % a.val_every == 0 or step == total:
             r.update(validate(net, table, d, val_idx, dev, a.solver_steps, a.exact))
-            torch.save({"model": net.state_dict(), "width": a.width, "step": step, "phase": phase, "config": cfg},
+            if phase == "fm":
+                for dc in decays:
+                    v = with_weights(ema[str(dc)], lambda: validate(net, table, d, val_idx, dev, a.solver_steps, a.exact))
+                    r.update({f"ema{dc}_{k}": v[k] for k in ("val_nll", "gen_hit", "gen_rot_p50", "gen_pos_p50")})
+            torch.save({"model": net.state_dict(), "ema": ema, "width": a.width, "step": step, "phase": phase, "config": cfg},
                        run / ("model_fm.pt" if phase == "fm" else "model.pt"))
         print(json.dumps({k: round(v, 4) if isinstance(v, float) else v for k, v in r.items()}), flush=True)
         log.write(json.dumps(r) + "\n")
@@ -159,25 +204,41 @@ def main():
     if a.init:
         net.load_state_dict(torch.load(a.init, map_location=dev)["model"])
     if a.fm_steps:
-        opt = torch.optim.Adam(net.parameters(), lr=a.fm_lr)
+        opt = (torch.optim.AdamW(net.parameters(), lr=a.fm_lr, weight_decay=a.weight_decay) if a.weight_decay > 0
+               else torch.optim.Adam(net.parameters(), lr=a.fm_lr))
         sched = schedule(opt, a.fm_steps)
         acc = np.zeros(3)
+        loss_scale = torch.tensor([a.sigma_rot] * 3 + [a.sigma_pos] * 3, device=dev) / math.sqrt(a.sigma_rot * a.sigma_pos)
         for step in range(1, a.fm_steps + 1):
             idx = torch.randint(a.val, S, (a.fm_batch,))
             P, cam, lab, ok, q, p, q1, p1 = make_batch(d, idx, dev)
             qb, pb = rnode.sample_base(q1, p1)
-            t = torch.rand(a.fm_batch, device=dev) * rnode.T_END
+            if a.source_uniform > 0:
+                uni = torch.rand(a.fm_batch, device=dev) < a.source_uniform
+                qb = torch.where(uni[:, None], geom.qrand(a.fm_batch, dev), qb)
+            if a.time_sampling == "logitnormal":
+                t = torch.sigmoid(torch.randn(a.fm_batch, device=dev))
+            elif a.time_sampling == "beta":
+                t = 1 - 0.999 * (1 - torch.distributions.Beta(1.5, 1.0).sample((a.fm_batch,)).to(dev))
+            else:
+                t = torch.rand(a.fm_batch, device=dev)
+            t = t * rnode.T_END
             qt, pt, target = rnode.fm_pair(q, p, qb, pb, t)
             f, _, _, seg = rnode.field(net, table, P, cam, qt, pt, t)
             l_fm = (f - target).pow(2).sum(-1).mean()
+            l_opt = ((f - target) / loss_scale).pow(2).sum(-1).mean() if a.loss_norm else l_fm
             # the segmentation output is trained where RNODE trains it: at the data pose
-            seg0 = rnode.field(net, table, P, cam, q, p, 0.0)[3] if step % 4 == 0 else None
-            l_seg = (F.binary_cross_entropy_with_logits(seg0, lab, reduction="none") * ok).sum() / ok.sum().clamp_min(1) if seg0 is not None else l_fm * 0
+            if a.gate:      # the mask acts at every pose: train it at the pose of the sample
+                l_seg = (F.binary_cross_entropy_with_logits(seg, lab, reduction="none") * ok).sum() / ok.sum().clamp_min(1) / 4
+            else:
+                seg0 = rnode.field(net, table, P, cam, q, p, 0.0)[3] if step % 4 == 0 else None
+                l_seg = (F.binary_cross_entropy_with_logits(seg0, lab, reduction="none") * ok).sum() / ok.sum().clamp_min(1) if seg0 is not None else l_fm * 0
             opt.zero_grad(set_to_none=True)
-            (l_fm + 0.2 * l_seg).backward()
+            (l_opt + 0.2 * l_seg).backward()
             torch.nn.utils.clip_grad_norm_(net.parameters(), 2.0)
             opt.step()
             sched.step()
+            ema_update(step)
             acc += [l_fm.item(), l_seg.item() * 4, 1]
             if step % a.log_every == 0:
                 r = {"fm_loss": acc[0] / acc[2], "l_seg": acc[1] / acc[2]}

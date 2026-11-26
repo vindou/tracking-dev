@@ -1,20 +1,25 @@
-"""Viser demo: the classical search of the tracker against flow hypotheses + the same ICP, on the evaluation scenes.
+"""Viser demo: the classical search of the tracker against the learned proposals (flow + verifier), on the
+evaluation scenes. Both end in the same ICP and fit check of the tracker.
 
-    python -m flow.evaluate            # once: hypotheses, tracker runs, results.json
-    python -m flow.demo [--port 8090]  # then open http://localhost:8090
+    python -m flow.evaluate --eval flow/data/eval_demo --device mps      # once: hypotheses, tracker runs, results.json
+    python -m flow.demo [--port 8090]                                     # then open http://localhost:8090
 
 Per scene it shows the cloud of the depth pair, the true pose (green wireframe), the pose the classical search
-accepted (red), and the flow in three labelled phases: (1) every hypothesis moving from its start to its end point
-(thin, coloured by agreement group); (2) the flow end point closest to the pose the tracker accepted (yellow), with
-its error; (3) the tracker's ICP moving from that end point to the accepted pose (blue), with the error after ICP.
-The ICP motion is drawn as an interpolation between the two poses (the ICP iterations are not recorded).
-Two 2-D slices of the learned field around the true pose are plotted at the bottom (colour = size of the predicted
-remaining motion, viridis; arrows = its direction in the slice). They are precomputed for every flow time
-(flow.precompute_fields, cache in <eval>/fields/) and change with the steps of the playback, with the hypotheses
-projected onto them. Text and plots are floating cards; the viser panel on the right holds only the settings.
-Playback is paced by real time (network time on the Jetson from the measured time per evaluation, ICP time as
-measured on this Mac) at a selectable fraction: "real time" plays the roughly quarter second as it would run. The table and the verdicts are read from results.json
-(tracker runs); only the animation is computed live, with the same seeds as the evaluation."""
+accepted (red), and the learned proposals in labelled phases:
+  1. flow: every hypothesis moving from its start to its end point (RK4 steps of the learned field);
+  2. verifier: each hypothesis is refined on its own points and scored; those below the minimum score disappear,
+     the rest are coloured by score; one per agreeing group is handed to the tracker;
+  3. tracker: its ICP and fit check, drawn as a motion from the handed hypothesis closest to the accepted pose
+     (yellow) to the accepted pose (blue). The ICP iterations are not recorded: the motion is an interpolation.
+Two 2-D slices of the learned velocity field around the true pose are plotted at the bottom (colour = speed,
+arrows = direction a hypothesis moves), at the flow time of the current step, with the hypotheses projected onto them.
+They are cached per scene in <eval>/fields/.
+
+The table and the verdicts are read from results.json (tracker runs). The animation is computed live with the
+same seeds; it reproduces the evaluated hypotheses when results.json was made on this machine with the same
+--device (the default folder eval_demo is), not for hypotheses made on another machine.
+Playback is paced by the time the network and verifier took for this scene on this machine, at a selectable
+fraction; that time is not the time on the Jetson, which has not been measured for this model."""
 import argparse
 import base64
 import io
@@ -31,16 +36,19 @@ import torch
 import trimesh
 import viser
 
-from . import evaluate, geom, infer, scene
+from . import evaluate, geom, infer, infer_rnode, rnode, scene, verifier as V
 
 ROOT = Path(__file__).resolve().parents[1]
-FILTERS = ("all scenes", "classical fails, flow succeeds", "classical succeeds, flow fails", "both succeed", "both fail")
+FILTERS = ("all scenes", "classical fails, learned succeeds", "classical succeeds, learned fails", "both succeed", "both fail",
+           "learned accepts a wrong pose")
 GREEN, RED, BLUE, GREY = (40, 190, 80), (225, 60, 50), (40, 110, 235), (150, 150, 150)
-YELLOW = (240, 190, 20)
-SPEEDS = {"real time": 1.0, "1/4 of real time": 0.25, "1/10 of real time": 0.1, "1/25 of real time": 0.04,
-          "1/50 of real time": 0.02}
-REFINE = 2      # end-point corrections after the Euler steps (infer.propose default)
+YELLOW, ORANGE = (240, 190, 20), (235, 140, 40)
+SPEEDS = {"real time": 1.0, "1/2 of real time": 0.5, "1/5 of real time": 0.2, "1/10 of real time": 0.1, "1/25 of real time": 0.04}
 MARK = {"correct": "✅ correct", "wrong": "❌ WRONG pose accepted", "none": "⚠️ no pose"}
+FIELD_GRID = 17                 # estimates per axis of a field slice
+FIELD_POS_HALF = 0.10           # m: half-width of the translation slice
+FIELD_ROT_HALF = 170.0          # degrees: half-width of the rotation slice
+FIELD_AXES = (0, 1)             # the slices use axes x and y (rig axes for positions, object axes for rotations)
 
 
 CAM_COL = ((0, 165, 160), (210, 70, 165))                 # points and frustum of camera 1 (D435i_1), camera 2 (D435i_2)
@@ -130,15 +138,87 @@ def pose_T(v):
     return geom.make_T(geom.R_from_quat(np.array(v[3:])), np.array(v[:3]))
 
 
+
+@torch.no_grad()
+def field_frames(net, table, rig, P, C, T_ref, dev, steps):
+    """Two 2-D slices of the learned velocity field around T_ref, at the flow time at the start of each solver step
+    (t = 1, ..., 1 / steps; hypotheses move from t = 1 to t = 0):
+      translation slice: rotation at the reference, centroid estimate moved in the rig x-y plane;
+      rotation slice: position at the reference, estimate rotated about the object x and y axes.
+    Arrays [steps, G, G] (row = second axis): pos_mm / rot_deg = speed (mm and degrees per unit of flow time) and
+    pos_u, pos_v / rot_u, rot_v = the direction a hypothesis moves, in the slice."""
+    G, (i, j) = FIELD_GRID, FIELD_AXES
+    N = G * G
+    c = T_ref[:3, :3] @ rig.centroid + T_ref[:3, 3]
+    X, cam, _ = infer_rnode._sets(P, C, c[None], np.random.default_rng(0), dev, torch.Generator(device=dev).manual_seed(0))
+    X, cam = X.expand(2 * N, -1, -1), cam.expand(2 * N, *cam.shape[1:])
+    g = np.linspace(-FIELD_POS_HALF, FIELD_POS_HALF, G)
+    A, B = np.meshgrid(g, g, indexing="xy")
+    off = np.zeros((2 * N, 3), np.float32)
+    off[:N, i], off[:N, j] = A.ravel(), B.ravel()
+    g = np.radians(np.linspace(-FIELD_ROT_HALF, FIELD_ROT_HALF, G))
+    A, B = np.meshgrid(g, g, indexing="xy")
+    rv = np.zeros((2 * N, 3), np.float32)
+    rv[N:, i], rv[N:, j] = A.ravel(), B.ravel()
+    q_ref = torch.from_numpy(geom.quat_from_R(T_ref[:3, :3]).astype(np.float32)).to(dev)[None].expand(2 * N, -1)
+    q = geom.qmul(q_ref, rnode.qexp(torch.from_numpy(rv).to(dev)))
+    p = torch.from_numpy(off).to(dev)
+    out = {k: [] for k in ("pos_mm", "pos_u", "pos_v", "rot_deg", "rot_u", "rot_v")}
+    h = 1.0 / steps
+    for s in range(steps):
+        f = rnode.field(net, table, X, cam, q, p, rnode.T_END * (1 - s * h))[0]
+        v = -(geom.qmat(q) @ f[:, 3:, None]).squeeze(-1) * rnode.POS_SCALE                 # motion per unit time, rig frame (m)
+        q2 = geom.qmul(q, rnode.qexp(-h * f[:, :3]))                                       # after one step of the rotation
+        d = (geom.qlog(geom.qmul(geom.qconj(q_ref), q2)) - torch.from_numpy(rv).to(dev)).cpu().numpy()
+        d[np.linalg.norm(d, axis=1) > 2.8] = 0                                             # the chart wraps
+        v, w = v.cpu().numpy(), f[:, :3].norm(dim=-1).rad2deg().cpu().numpy()
+        out["pos_mm"].append(1000 * np.linalg.norm(v[:N], axis=1))
+        out["pos_u"].append(v[:N, i])
+        out["pos_v"].append(v[:N, j])
+        out["rot_deg"].append(w[N:])
+        out["rot_u"].append(d[N:, i])
+        out["rot_v"].append(d[N:, j])
+    return {k: np.stack(v).reshape(-1, G, G).astype(np.float32) for k, v in out.items()}
+
+
+def cached_field_frames(net, table, rig, ev, scene_index, P, C, T_ref, dev, steps):
+    f = Path(ev) / "fields" / f"scene_{scene_index:04d}.npz"
+    if f.exists():
+        z = np.load(f)
+        if z["pos_mm"].shape[:2] == (steps, FIELD_GRID):
+            return {k: z[k] for k in z.files}
+    fr = field_frames(net, table, rig, P, C, T_ref, dev, steps)
+    f.parent.mkdir(exist_ok=True)
+    tmp = f.with_suffix(".tmp.npz")
+    np.savez(tmp, **fr)
+    tmp.replace(f)
+    return fr
+
+
+def results_table(table):
+    L = ["| scenes | classical | flow + verifier |", "|---|---|---|"]
+    for cat, r in table.items():
+        L.append(f"| {cat} ({r['n']}) | {r['classical_correct']} / {r['classical_wrong']} / {r['classical_none']} | "
+                 f"**{r['flow_correct']}** / {r['flow_wrong']} / {r['flow_none']} |")
+    return "\n".join(L)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="flow/runs/a/model.pt")
-    ap.add_argument("--eval", default="flow/data/eval")
+    ap.add_argument("--model", default="flow/runs/rnode/model_fm.pt")
+    ap.add_argument("--verifier", default="flow/runs/verifier/model.pt")
+    ap.add_argument("--min-score", type=float, default=0.85)
+    ap.add_argument("--table", default="flow/data/rnode_table.npy")
+    ap.add_argument("--eval", default="flow/data/eval_demo")
     ap.add_argument("--port", type=int, default=8090)
     ap.add_argument("--k", type=int, default=32)
+    ap.add_argument("--hints", type=int, default=16)
     ap.add_argument("--view-distance", type=float, default=1.0, help="camera distance factor of the automatic view")
     ap.add_argument("--centers", type=int, default=4)
     ap.add_argument("--orient", type=int, default=32)
+    ap.add_argument("--solver-steps", type=int, default=4)
+    ap.add_argument("--show", default=FILTERS[1], choices=FILTERS, help="the selection of scenes shown first")
+    ap.add_argument("--speed", default="1/5 of real time", choices=tuple(SPEEDS))
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     a = ap.parse_args()
     ev = ROOT / a.eval
@@ -149,8 +229,11 @@ def main():
     raw = np.memmap(ev / "scenes.bin", dtype=np.uint8, mode="r")
     rec = 128 + 4 * n_px
     dev = torch.device(a.device)
-    net = infer.load_model(ROOT / a.model, dev)
+    net = infer_rnode.load_model(ROOT / a.model, dev)
+    ver = V.load(ROOT / a.verifier, dev)
+    table = torch.from_numpy(np.load(ROOT / a.table)).to(dev)
     rig = scene.Rig()
+    STEPS = a.solver_steps
 
     def load(i):
         blk = raw[24 + i * rec: 24 + (i + 1) * rec]
@@ -178,7 +261,7 @@ def main():
     h_end = sc.add_mesh_simple("/flow_end", V0, F, color=YELLOW, opacity=0.8, visible=False)
     h_end_wire = sc.add_mesh_simple("/flow_end_wire", V0, F, color=YELLOW, wireframe=True, visible=False)
     h_hyp = [sc.add_mesh_simple(f"/hyp/{k}", Vc, F, color=GREY, opacity=0.25, visible=False) for k in range(a.centers * a.orient)]
-    state = {"list": list(range(len(scenes))), "cloud": None, "seeds": None, "gen": 0}
+    state = {"list": list(range(len(scenes))), "cloud": None, "gen": 0}
     lock = threading.Lock()
 
     # Reading panes (floating cards on the left and at the bottom: text and field plots) are separate from the viser
@@ -192,50 +275,48 @@ def main():
             self.parts[key] = html
             self.h.content = f'<div style="{CARD}{self.style}">' + "".join(self.parts.get(k, "") for k in self.order) + "</div>"
 
-    class Section:                      # .content = markdown, as the gui markdown elements had
+    class Section:                      # .content = markdown
         def __init__(self, pane, key, wrap="{}"):
             self.pane, self.key, self.wrap = pane, key, wrap
 
         content = property(lambda self: "", lambda self, md: self.pane.set(self.key, self.wrap.format(md_html(md))))
 
-    info = Pane("left:12px;top:12px;width:400px;", ("intro", "phase", "verdict"))
-    plots = Pane("left:438px;bottom:12px;", ("plots",))
+    info = Pane("left:12px;top:12px;width:410px;", ("intro", "phase", "verdict"))
+    plots = Pane("left:448px;bottom:12px;", ("plots",))
     rule = '<div style="border-top:1px solid #ccc;margin:8px 0 6px"></div>'
-    phase = Section(info, "phase", rule + '<div style="height:205px;overflow:hidden">{}</div>')
+    phase = Section(info, "phase", rule + '<div style="height:215px;overflow:hidden">{}</div>')
     verdict = Section(info, "verdict", rule + "{}")
     info.set("intro", md_html(
-        "## Finding the object: classical search vs flow\nOne depth pair per scene, tracker in search state. Both methods end in "
-        "the same ICP and fit check of the tracker. Counts are **correct / wrong / none**: accepted within "
-        f"{res['ok_mm']:.0f} mm and {res['ok_deg']:.0f}° of the truth / accepted elsewhere / nothing accepted in 2 s.\n"
-        + evaluate.markdown(res["table"], compact=True)) +
+        "## Finding the object: classical search vs learned proposals\nOne depth pair per scene, tracker in search state. The "
+        "network is trained on synthetic data only. Both methods end in the same ICP and fit check of the tracker. Counts are "
+        f"**correct / wrong / none**: accepted within {res['ok_mm']:.0f} mm and {res['ok_deg']:.0f}° of the truth / accepted "
+        "elsewhere / nothing accepted.\n" + results_table(res["table"])) +
         f'<div>Points: {swatch(CAM_COL[0], CAM_NAME[0])}, {swatch(CAM_COL[1], CAM_NAME[1])}; the camera outlines have the same '
-        f'colours.<br>{swatch(GREEN, "truth (wireframe)")} {swatch(RED, "classical result")} {swatch(YELLOW, "flow end point")} '
-        f'{swatch(BLUE, "after ICP + fit check")}<br>Thin shapes: flow hypotheses ({swatch(BLUE, "largest agreeing group")}, '
-        f'{swatch((235, 160, 40), "other groups")}, {swatch(GREY, "alone")}).</div>')
+        f'colours.<br>{swatch(GREEN, "truth (wireframe)")} {swatch(RED, "classical result")} {swatch(YELLOW, "handed to the tracker")} '
+        f'{swatch(BLUE, "after ICP + fit check")}<br>Thin shapes: hypotheses ({swatch(GREY, "during the flow")}; after the verifier '
+        f'{swatch(BLUE, "kept")}, {swatch(ORANGE, "kept, lower score")}; rejected ones disappear).</div>')
 
     with gui.add_folder("Scene"):
         dd_cat = gui.add_dropdown("Clutter", options=("all",) + tuple(scene.CATEGORIES), initial_value="all")
-        dd_fil = gui.add_dropdown("Show", options=FILTERS, initial_value=FILTERS[1])
+        dd_fil = gui.add_dropdown("Show", options=FILTERS, initial_value=a.show)
         sl = gui.add_slider("Scene", min=0, max=1, step=1, initial_value=0)
         b_prev, b_next = gui.add_button("Previous scene"), gui.add_button("Next scene")
     with gui.add_folder("Playback"):
-        b_play = gui.add_button("Play flow")
-        dd_speed = gui.add_dropdown("Speed", options=tuple(SPEEDS), initial_value="1/25 of real time")
+        b_play = gui.add_button("Play")
+        dd_speed = gui.add_dropdown("Speed", options=tuple(SPEEDS), initial_value=a.speed)
     with gui.add_folder("Display"):
         c_truth = gui.add_checkbox("True pose", initial_value=True)
         c_classical = gui.add_checkbox("Classical result", initial_value=True)
-        c_flow = gui.add_checkbox("Flow end point and result", initial_value=True)
-        c_hyp = gui.add_checkbox("Flow hypotheses", initial_value=True)
+        c_flow = gui.add_checkbox("Learned result", initial_value=True)
+        c_hyp = gui.add_checkbox("Hypotheses", initial_value=True)
         c_field = gui.add_checkbox("Flow field plots", initial_value=True)
         c_label = gui.add_checkbox("Colour cloud by true object / clutter", initial_value=False)
         c_follow = gui.add_checkbox("Move the view to the object", initial_value=True)
 
     VIEW = np.array([0.20, -0.29, -0.17])                   # camera offset from the object (automatic view)
-    TIMES = infer.field_times()
 
     def draw_field(frame, step):
-        """The two field slices at flow-time frame `frame` (index into TIMES), with the hypotheses at trajectory state
-        `step` projected onto each slice."""
+        """The two field slices of solver step `frame`, with the hypotheses at trajectory state `step` projected on them."""
         last = state.get("last")
         if last is None or not c_field.value:
             plots.h.content = ""
@@ -245,39 +326,40 @@ def main():
         dp = dr = None
         if "traj_q" in h and len(h["q"]):
             step = min(step, len(h["traj_p"]) - 1)
-            dp = (h["traj_p"][step] - c)[:, list(infer.FIELD_AXES)] * 1000
+            dp = (h["traj_p"][step] - c)[:, list(FIELD_AXES)] * 1000
             q_ref = torch.from_numpy(geom.quat_from_R(T[:3, :3]).astype(np.float32))
             tq = torch.from_numpy(h["traj_q"][step]).float()
             near = np.linalg.norm(h["traj_p"][step] - c, axis=1) < 0.05          # rotation dots: hypotheses at the object
-            dr = np.degrees(geom.qlog(geom.qmul(geom.qconj(q_ref).expand_as(tq), tq)).numpy())[near][:, list(infer.FIELD_AXES)]
-        t = TIMES[frame]
+            dr = np.degrees(geom.qlog(geom.qmul(geom.qconj(q_ref).expand_as(tq), tq)).numpy())[near][:, list(FIELD_AXES)]
+        frame = min(frame, STEPS - 1)
+        t = 1 - frame / STEPS
         a_ = field_svg("p", fr["pos_mm"][frame], fr["pos_u"][frame], fr["pos_v"][frame], float(fr["pos_mm"].max()), 100, "mm",
                        f"Translation field, t = {t:.3g}", "rig x", "rig y", dots=dp)
         b_ = field_svg("r", fr["rot_deg"][frame], fr["rot_u"][frame], fr["rot_v"][frame], float(fr["rot_deg"].max()), 170, "deg",
                        f"Rotation field, t = {t:.3g}", "about object x", "about object y", dots=dr)
-        cap = ('<div style="width:650px;font-size:11.5px;line-height:1.35">Two 2-D slices of the learned field through the true pose '
-               '(white cross). Colour: size of the motion the network predicts is still needed; arrows: its direction in the slice. '
-               'Left: rotation at the truth, position varied. Right: position at the truth, rotation varied (the rotation flow was '
-               'trained on offsets up to 70°). <span style="color:#ff3b6b;font-weight:700">●</span> this scene\'s hypotheses, projected onto the '
-               'slice (they are not in it: each also has an error in the other four dimensions).</div>')
+        cap = ('<div style="width:650px;font-size:11.5px;line-height:1.35">Two 2-D slices of the learned velocity field through the '
+               'true pose (white cross); hypotheses move from t = 1 to t = 0. Colour: speed (per unit of flow time); arrows: the '
+               'direction a hypothesis moves. Left: rotation at the truth, position varied. Right: position at the truth, rotation '
+               'varied. <span style="color:#ff3b6b;font-weight:700">●</span> this scene\'s hypotheses, projected onto the slice '
+               '(they are not in it: each also has an error in the other four dimensions).</div>')
         plots.set("plots", f'<div style="display:flex;gap:6px">{a_}{b_}</div>{cap}')
 
     def matches(s):
         if dd_cat.value != "all" and s["cat"] != dd_cat.value:
             return False
         c, f = s["classical"] == "correct", s["flow"] == "correct"
-        return {FILTERS[0]: True, FILTERS[1]: not c and f, FILTERS[2]: c and not f, FILTERS[3]: c and f, FILTERS[4]: not c and not f}[dd_fil.value]
+        return {FILTERS[0]: True, FILTERS[1]: not c and f, FILTERS[2]: c and not f, FILTERS[3]: c and f, FILTERS[4]: not c and not f,
+                FILTERS[5]: s["flow"] == "wrong"}[dd_fil.value]
 
     def describe(s, n):
         cl, fw = s["classical"], s["flow"]
         t_c = f"after {s['classical_cycles']} cycles ({s['classical_cycles'] * evaluate.PERIOD_MS / 1000:.2f} s of pairs)"
         e_c = f", error {s['classical_err_mm']:.1f} mm / {s['classical_err_deg']:.1f}°" if cl != "none" else ""
         e_f = f", error {s['flow_err_mm']:.1f} mm / {s['flow_err_deg']:.1f}°" if fw != "none" else ""
-        t_f = f"ICP and fit check of {s['hints_tried']} hypotheses in one cycle ({s['flow_icp_ms']:.0f} ms on this Mac)"
         return (f"**Scene {s['scene']}** ({s['cat']}), {n} shown\n\n"
                 f"**Classical search:** {MARK[cl]} {t_c}{e_c}\n\n"
-                f"**Flow + ICP:** {MARK[fw]}{e_f}; {t_f}\n\n"
-                f"Flow hypotheses within 15 mm / 15° before ICP: {s['hyp_good']} of {a.centers * a.orient}")
+                f"**Flow + verifier + ICP:** {MARK[fw]}{e_f}\n\n"
+                f"Flow end points within 15 mm / 15° of the truth: {s['hyp_good']}")
 
     def err(Ta, Tb):
         return 1000 * np.linalg.norm(Ta[:3, 3] - Tb[:3, 3]), geom.rot_angle_deg(Ta[:3, :3], Tb[:3, :3])
@@ -285,26 +367,27 @@ def main():
     def set_pose(handle, q, t):
         handle.wxyz, handle.position = q, t
 
+    def lerp(q0, q1, p0, p1, w):
+        q1 = np.where((q0 * q1).sum(-1, keepdims=True) < 0, -q1, q1)
+        q = (1 - w) * q0 + w * q1
+        return q / np.linalg.norm(q, axis=-1, keepdims=True), (1 - w) * p0 + w * p1
+
     def animate(gen, h):
         alive = lambda: state["gen"] == gen
-        groups, T_true, T_acc, ok = h["groups"], state["T_true"], state["T_flow"], state["flow_ok"]
-        col = {}
-        for gi, g in enumerate(groups):
-            for j in g:
-                col[j] = BLUE if gi == 0 and len(g) > 1 else ((235, 160, 40) if len(g) > 1 else GREY)
+        T_true, T_acc, ok = state["T_true"], state["T_flow"], state["flow_ok"]
         K = len(h["q"])
-        # Real durations: network time on the Jetson from the measured 5.2 ms per evaluation of 32 hypotheses (position
-        # stage: 5 evaluations of the seeds; rotation flow: one evaluation of K hypotheses per step); ICP and fit check
-        # as measured in the tracker run of this scene on this Mac. The animation runs at `rate` times that speed.
         rate = SPEEDS[dd_speed.value]
-        ms_pos = infer.JETSON_MS_PER_32 * 5 * len(h["seeds"]) / 32
-        ms_step = infer.JETSON_MS_PER_32 * K / 32
+        # Time of the network and verifier for this scene on this machine, divided over the phases by the number of
+        # network evaluations: position stage (seeds x 4 per step), flow (K x 4 per step), verifier (ICP steps + score).
+        n_pos, n_flow, n_ver = len(h["seeds"]) * 4 * STEPS, K * 4 * STEPS, K * 3
+        ms_all = 1000 * h["t_flow"]
+        ms_pos, ms_step, ms_ver = (ms_all * n / max(1, n_pos + n_flow + n_ver) for n in (n_pos, n_flow / STEPS, n_ver))
         ms_icp = state["icp_ms"]
-        clock = lambda ms: f"\n\n**Real time elapsed: {ms:.0f} ms** (playback: {dd_speed.value})"
+        clock = lambda ms: f"\n\n**Time elapsed: {ms:.0f} ms** on this machine (playback: {dd_speed.value})"
 
         def play(ms, draw):
             """Draws draw(w), w in (0, 1], over ms of real time at the playback rate. False if the scene changed."""
-            dur = ms / 1000 / rate
+            dur = max(ms, 60) / 1000 / rate
             n = max(1, int(round(dur * 30)))
             for f in range(1, n + 1):
                 if not alive():
@@ -313,57 +396,88 @@ def main():
                 time.sleep(dur / n)
             return True
 
-        hold = lambda sec: time.sleep(0 if rate >= 1 else sec)     # reading pauses (not real time), none at real time
+        hold = lambda sec: time.sleep(sec if rate < 1 else 0.3 * sec)     # reading pauses (not part of the time shown)
         with server.atomic():
             h_end.visible = h_end_wire.visible = h_flow.visible = False
             for k, hh in enumerate(h_hyp):
                 hh.visible = k < K and c_hyp.value
                 if k < K:
-                    hh.color = col.get(k, GREY)
+                    hh.color = GREY
+        if K == 0:
+            phase.content = "### No seed\nThe cloud has no group of points to start from: no hypothesis."
+            return
         # phase 0: position stage (not drawn: the hypotheses start at the positions it found)
-        phase.content = (f"### 0 · Position stage\n{len(h['seeds'])} seeds on the cloud, 5 network evaluations: {len(h['centers'])} "
-                         f"candidate position(s). Not drawn; the shapes start there." + clock(0))
+        phase.content = (f"### 0 · Position stage\n{len(h['seeds'])} seeds on the cloud, each integrated through the flow: "
+                         f"{len(h['centers'])} candidate position(s). Not drawn; the shapes start there, in {a.orient} orientations "
+                         "each." + clock(0))
         draw_field(0, 0)
+        tq, tp = h["traj_q"], h["traj_p"]
+        with server.atomic():
+            for k in range(K):
+                set_pose(h_hyp[k], tq[0][k], tp[0][k])
         if not play(ms_pos, lambda w: None):
             return
-        # phase 1: the flow (Euler steps, then end-point corrections)
-        tq, tp = h["traj_q"], h["traj_p"]
-        n_euler = len(tq) - 1 - REFINE
-        for step in range(len(tq) - 1):
-            phase.content = (f"### 1 · Flow: Euler step {step + 1} of {n_euler}" if step < n_euler else
-                             f"### 1 · Flow: end-point correction {step - n_euler + 1} of {REFINE}") + \
-                (f"\n{K} hypotheses, each moved by the network's predicted remaining motion ({ms_step:.1f} ms per step on the "
-                 "Jetson). No ICP yet.") + clock(ms_pos + step * ms_step)
-            draw_field(min(step, len(TIMES) - 1), step)       # the field the network is evaluated on in this step
-            q0, q1 = tq[step], tq[step + 1]
-            q1 = np.where((q0 * q1).sum(-1, keepdims=True) < 0, -q1, q1)
+        # phase 1: the flow
+        for step in range(STEPS):
+            phase.content = (f"### 1 · Flow: step {step + 1} of {STEPS}\n{K} hypotheses move along the learned velocity field "
+                             f"(Runge-Kutta, 4 network evaluations per step). No ICP yet." + clock(ms_pos + step * ms_step))
+            draw_field(step, step)
 
-            def draw(w, q0=q0, q1=q1, p0=tp[step], p1=tp[step + 1]):
-                q = (1 - w) * q0 + w * q1
-                q /= np.linalg.norm(q, axis=-1, keepdims=True)
-                pp = (1 - w) * p0 + w * p1
+            def draw(w, s=step):
+                q, pp = lerp(tq[s], tq[s + 1], tp[s], tp[s + 1], w)
                 with server.atomic():
                     for k in range(K):
                         set_pose(h_hyp[k], q[k], pp[k])
 
             if not play(ms_step, draw):
                 return
-        ms_flow = ms_pos + (len(tq) - 1) * ms_step
-        draw_field(len(TIMES) - 1, len(tq) - 1)
+        ms_flow = ms_pos + STEPS * ms_step
+        draw_field(STEPS - 1, STEPS)
         hold(0.5)
-        if not alive() or K == 0:
+        if not alive():
             return
-        if not ok:      # nothing passed the fit check: leave the largest agreeing group on screen
-            keep = set(groups[0]) if groups else set()
+        # phase 2: verifier (refinement of each hypothesis on its own points, then the score)
+        score, keep = h["score"], h["score"] >= a.min_score
+        handed = infer.hint_order(h, a.hints)
+        phase.content = (f"### 2 · Verifier: refine, then score\nEach hypothesis is refined on its own {rnode.N_POINTS} points "
+                         "(6 point-to-plane steps), then a second small network scores the refined pose (0 to 1)." + clock(ms_flow))
+
+        def draw_refine(w):
+            q, pp = lerp(tq[-1], h["q"].astype(np.float32), tp[-1], h["p"].astype(np.float32), w)
             with server.atomic():
                 for k in range(K):
-                    h_hyp[k].visible = c_hyp.value and k in keep
-            best = min(err(h["T"][k], T_true) for k in range(K))
-            phase.content = ("### 2 · Tracker: no hypothesis passed the fit check\nThe shapes left are the largest agreeing group "
-                             f"of flow end points. Closest flow end point to the truth: {best[0]:.1f} mm / {best[1]:.1f}°.")
+                    set_pose(h_hyp[k], q[k], pp[k])
+
+        if not play(ms_ver, draw_refine):
             return
-        # phase 2: the flow end point that the accepted pose came from (the closest one to it)
-        j = min(range(K), key=lambda k: err(h["T"][k], T_acc)[0] / 10 + err(h["T"][k], T_acc)[1] / 10)
+        with server.atomic():
+            for k in range(K):
+                h_hyp[k].visible = c_hyp.value and bool(keep[k])
+                h_hyp[k].color = BLUE if score[k] >= 0.5 + a.min_score / 2 else ORANGE
+        ms_net = ms_flow + ms_ver
+        best = min((err(h["T"][k], T_true) for k in range(K)), key=lambda e: e[0] / 10 + e[1] / 10)
+        phase.content = (f"### 2 · Verifier: {int(keep.sum())} of {K} kept\nScore at least {a.min_score:g}: kept "
+                         f"({int(keep.sum())}); below: rejected ({int((~keep).sum())}, removed). Kept hypotheses that agree "
+                         f"(15 mm, 15°) form {len(handed)} group(s); the best of each is handed to the tracker, highest score "
+                         f"first.\n\nClosest hypothesis to the truth, kept or not: {best[0]:.1f} mm / {best[1]:.1f}°." + clock(ms_net))
+        hold(2.0)
+        if not alive():
+            return
+        if not handed:
+            phase.content = ("### Result: no pose from the learned proposals\nThe verifier rejected every hypothesis, so nothing "
+                             f"is handed to the tracker and no pose is reported (closest hypothesis: {best[0]:.1f} mm / "
+                             f"{best[1]:.1f}° from the truth). In the tracker the classical search continues in that case."
+                             + clock(ms_net))
+            return
+        if not ok:
+            with server.atomic():
+                for k in range(K):
+                    h_hyp[k].visible = c_hyp.value and k in handed
+            phase.content = (f"### 3 · Tracker: none of the {len(handed)} handed hypotheses passed the fit check\nThe shapes left "
+                             "are the handed hypotheses. No pose is reported; the classical search continues." + clock(ms_net))
+            return
+        # phase 3: the handed hypothesis the accepted pose came from (the closest one), then ICP and fit check
+        j = min(handed, key=lambda k: err(h["T"][k], T_acc)[0] / 10 + err(h["T"][k], T_acc)[1] / 10)
         T_end = h["T"][j]
         e_end, e_acc = err(T_end, T_true), err(T_acc, T_true)
         q_end, q_acc = geom.quat_from_R(T_end[:3, :3]), geom.quat_from_R(T_acc[:3, :3])
@@ -373,37 +487,34 @@ def main():
             set_pose(h_end, q_end, T_end[:3, 3])
             set_pose(h_end_wire, q_end, T_end[:3, 3])
             h_end.visible = c_flow.value
-        phase.content = ("### 2 · Where the flow ends (yellow)\nThe flow end point closest to the pose the tracker accepted: "
-                         f"**{e_end[0]:.1f} mm / {e_end[1]:.1f}°** from the truth. This is the output of the network alone." + clock(ms_flow))
+        phase.content = (f"### 3 · Handed to the tracker (yellow)\nThe handed hypothesis closest to the pose the tracker accepted: "
+                         f"score {score[j]:.2f}, **{e_end[0]:.1f} mm / {e_end[1]:.1f}°** from the truth. This is the output of the "
+                         "learned part alone." + clock(ms_net))
         hold(1.8)
         if not alive():
             return
-        # phase 3: ICP and fit check of the tracker, drawn as a straight interpolation to the accepted pose
-        phase.content = ("### 3 · Tracker: ICP from the flow end points, then the fit check (blue)\nClassical point-to-plane ICP "
-                         f"closes the remaining gap ({ms_icp:.0f} ms for all hypotheses, this Mac). Yellow outline = where the flow ended."
-                         + clock(ms_flow))
+        phase.content = ("### 3 · Tracker: ICP on the full cloud, then the fit check (blue)\nThe tracker's own point-to-plane ICP "
+                         f"and fit check decide ({ms_icp:.1f} ms for the handed hypotheses). Yellow outline = what was handed over."
+                         + clock(ms_net))
         with server.atomic():
             h_end.visible = False
             h_end_wire.visible = c_flow.value
             set_pose(h_flow, q_end, T_end[:3, 3])
             h_flow.visible = c_flow.value
-        if np.dot(q_end, q_acc) < 0:
-            q_acc = -q_acc
+
         def draw_icp(w):
             w = 0.5 - 0.5 * np.cos(np.pi * w)
-            q = (1 - w) * q_end + w * q_acc
-            set_pose(h_flow, q / np.linalg.norm(q), (1 - w) * T_end[:3, 3] + w * T_acc[:3, 3])
+            q, pp = lerp(q_end, q_acc, T_end[:3, 3], T_acc[:3, 3], w)
+            set_pose(h_flow, q, pp)
 
-        if not play(ms_icp, draw_icp):
+        if not play(max(ms_icp, 150), draw_icp):
             return
-        phase.content = (f"### Result\n| | error to the truth |\n|---|---|\n| flow end point (yellow outline) | {e_end[0]:.1f} mm / {e_end[1]:.1f}° |\n"
+        phase.content = (f"### Result\n| | error to the truth |\n|---|---|\n| handed hypothesis (yellow outline) | {e_end[0]:.1f} mm / {e_end[1]:.1f}° |\n"
                          f"| after the tracker's ICP (blue) | **{e_acc[0]:.1f} mm / {e_acc[1]:.1f}°** |\n\n"
-                         + ("The accepted pose is wrong: it passed the tracker's fit check." if state["flow_verdict"] != "correct"
-                            else "ICP refined the flow end point." if e_acc[0] < e_end[0] - 0.5 or e_acc[1] < e_end[1] - 0.5
-                            else "The flow end point was already this accurate; ICP and the fit check confirmed it.")
-                         + f"\n\n**Real time: {ms_flow:.0f} ms network (Jetson, from the measured time per evaluation) + {ms_icp:.0f} ms "
-                           f"ICP (this Mac) = {ms_flow + ms_icp:.0f} ms.** Classical search on this scene: "
-                           f"{state['classical_text']}.")
+                         + ("The accepted pose is wrong: it passed the verifier and the tracker's fit check."
+                            if state["flow_verdict"] != "correct" else "The tracker's fit check accepted it.")
+                         + f"\n\n**{ms_net:.0f} ms network and verifier + {ms_icp:.1f} ms ICP and fit check, on this machine** "
+                           f"(not measured on the Jetson). Classical search on this scene: {state['classical_text']}.")
 
     def show(replay_only=False):
         with lock:
@@ -412,12 +523,12 @@ def main():
             lst = state["list"]
             if not lst:
                 verdict.content = "No scene matches this selection."
+                phase.content = ""
                 return
             s = scenes[lst[min(int(sl.value), len(lst) - 1)]]
             T, depth, labels = load(s["scene"])
-            if not replay_only:
-                P, C, L = rig.cloud(depth, labels=labels)
-                state["cloud"] = (P, C, L)
+            if not replay_only or state["cloud"] is None:
+                state["cloud"] = rig.cloud(depth, labels=labels)
             P, C, L = state["cloud"]
             idx = np.random.default_rng(0).choice(len(P), min(len(P), 60000), replace=False)
             colr = np.where(L[idx, None] > 0, [[250, 170, 40]], [[130, 130, 140]]) if c_label.value else \
@@ -428,14 +539,13 @@ def main():
             h_classical.wxyz, h_classical.position = geom.quat_from_R(Tc[:3, :3]), Tc[:3, 3]
             h_classical.visible = s["classical"] != "none" and c_classical.value
             Tf = pose_T(s["flow_pose"])
-            h_flow.wxyz, h_flow.position = geom.quat_from_R(Tf[:3, :3]), Tf[:3, 3]
             h_flow.visible = h_end.visible = h_end_wire.visible = False
             state["flow_ok"] = s["flow"] != "none"
             state["flow_verdict"], state["T_true"], state["T_flow"] = s["flow"], np.array(T), Tf
             state["icp_ms"] = s["flow_icp_ms"]
             state["classical_text"] = (f"{s['classical_cycles'] * evaluate.PERIOD_MS:.0f} ms of pairs, "
                                        + {"correct": "correct", "wrong": "wrong pose", "none": "no pose"}[s["classical"]])
-            phase.content = "### Computing the flow ..."
+            phase.content = "### Computing the hypotheses ..."
             verdict.content = describe(s, len(lst))
             c = T[:3, :3] @ rig.centroid + T[:3, 3]
             state["center"] = c
@@ -444,11 +554,9 @@ def main():
             if c_follow.value and not replay_only:
                 for cl in server.get_clients().values():
                     aim(cl)
-            h = infer.propose(net, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, seed=s["scene"], trajectory=True)
-            if not infer.field_cache_path(ev, s["scene"]).exists():
-                phase.content = ("### Computing the flow field of this scene ...\nNot in the cache yet (about 10 s, once). "
-                                 "`python -m flow.precompute_fields` fills the cache for all scenes.")
-            fr = infer.cached_field_frames(net, rig, ev, s["scene"], P, C, np.array(T), dev)
+            h = infer_rnode.propose(net, table, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, solver_steps=STEPS,
+                                    seed=s["scene"], trajectory=True, verifier=ver, min_score=a.min_score)
+            fr = cached_field_frames(net, table, rig, ev, s["scene"], P, C, np.array(T), dev, STEPS)
             state["last"] = (np.array(T), h, fr)
         animate(gen, h)
 

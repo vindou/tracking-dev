@@ -154,6 +154,68 @@ python -m flow.evaluate --method rnode --model flow/runs/rnode/model_fm.pt --eva
 python -m flow.tests_rnode
 ```
 
+## Verifier, encoders and training variants (2026-11-24; `verifier.py`, `litept.py`, `compare.py`, `remote_eval.sh`)
+
+**Outcome: a learned verifier that drops hypotheses before the tracker sees them is the only change that improved
+the tracker result. No encoder, training recipe or data variant did.**
+
+Evaluation set: `flow/data/eval2`, 1,600 scenes (320 per kind, seed 770001). Models are compared on the same scenes
+with an exact sign test on the scenes that change (`python -m flow.compare REF OTHER...`). Two seeds of the same
+recipe differ by 3 scenes in total while 65 scenes flip (+31 -34), so that is the noise floor.
+
+| configuration (+ ICP), 1,600 scenes | correct / wrong / none | correct, paired | wrong, paired |
+|---|---|---|---|
+| classical | 958 / 134 / 508 | | |
+| baseline: `runs/rnode/model_fm.pt`, RK4 x 4 | 1359 / 142 / 99 | reference | reference |
+| same recipe, seed 1 | 1356 / 143 / 101 | +31 -34 | -30 +31 |
+| verifier, reorder only (threshold 0) | 1344 / 163 / 93 | +35 -50 | -29 +50 |
+| verifier, threshold 0.5 | 1403 / 62 / 135 | +71 -27 | -89 +9 |
+| verifier, threshold 0.7 | 1407 / 51 / 142 | +76 -28 | -98 +7 |
+| verifier, threshold 0.85 | 1407 / 42 / 151 | +82 -34 | -107 +7 |
+| verifier, threshold 0.95 | 1389 / 32 / 179 | +82 -52 | -116 +6 |
+| verifier 0.7, Euler x 8 | 1408 / 54 / 138 | +82 -33 | -95 +7 |
+
+The thresholds were compared on this same set; the figure at the chosen threshold is not confirmed on fresh scenes.
+
+- **Verifier** (`verifier.py`, 0.53 M parameters). Each hypothesis is refined by 6 point-to-plane steps against the
+  closest-point table and scored from the residual features of the cloud and the coverage of 256 model points.
+  Trained on hypotheses of the baseline flow from the training scenes (starts near the truth, far starts, base
+  samples), label: within 10 mm and 10 degrees after refinement. Hypotheses below the threshold are not sent
+  (`infer_rnode --verifier MODEL --min-score X`). Reordering alone does not help; rejecting does.
+- **Solver.** Euler x 8 equals RK4 x 4 at half the network evaluations (1364 / 142 / 94 without verifier);
+  Euler x 4 is 1346 / 151 / 103 and Euler x 2 is worse (p = 0.04). On validation Euler x 4 looked much better than
+  RK4 x 4 (78 % against 68 %); that did not carry through the tracker.
+- **Lean Point Networks encoder** (Le et al., arXiv 1907.00960; `--encoder lpn`, 2.65 M parameters, 4 times slower
+  to train). Validation 80 % against 68 %, but through the tracker 1345 / 177 / 78: more wrong acceptances
+  (-29 +64, p < 0.001). With the verifier at 0.5: 1402 / 78 / 120, not better than the baseline with the verifier.
+- **LitePT encoder** (Yue et al., arXiv 2512.13689; `--encoder litept_t`, `litept_s`; differences from the paper at
+  the top of `litept.py`). Through the tracker on eval2 (correct / wrong / none; baseline 1359 / 142 / 99, with the
+  verifier at 0.85 1407 / 42 / 151): `litept_t` 1355 / 167 / 78, with verifier 1415 / 51 / 134; `litept_t_rig`
+  1351 / 184 / 65 (wrong: -37 +79, p < 0.001), with verifier 1413 / 50 / 137. No more correct poses than the
+  baseline, more wrong ones without the verifier; not adopted.
+- **LitePT speed** (`bench_litept.py`, `tests_litept.py`; batch 256, RTX 4090, 7 GB limit). The first code ran at
+  0.75 steps/s; 96.5 % of a step was the backward pass of the `f[idx]` gathers (`index_put_` with accumulation).
+  `index_select` (`LITEPT_SELECT=1`, the default) gives the same values and gradients: 16.0 steps/s (baseline 46.7,
+  `lpn` 10.5; 5.45 GB). Cells in the rig frame (`litept_t_rig`, `litept_s_rig`; tables built once per cloud and
+  cached) do not change the training speed (15.6) but one solve of 128 hypotheses takes 148 ms in place of 190 ms
+  (baseline 53, `lpn` 179), and the validation likelihood is normal again (-1.48; body-frame cells +0.08).
+  Fixed-shape tensors (`LITEPT_IMPL=fixed`; same outputs to 1e-15 in float64) are slower and need twice the memory:
+  out of memory at batch 256, 9.1 steps/s with `LITEPT_COMPILE=1 LITEPT_AMP=1`. `litept_s` does not fit at batch
+  256 under 7 GB (13.6 steps/s at batch 128). `FLOW_GPU_GB` limits the GPU memory of any flow process.
+- **Training variants** (30,000 steps each, all within the noise floor unless noted): logit-normal time sampling
+  1343 / 149 / 108; beta time sampling 1358 / 140 / 102; 30 % uniform source 1355 / 147 / 98; loss normalization
+  1352 / 155 / 93; wider rotation source (0.9 rad) 1346 / 157 / 97; weight decay 0.01 1358 / 144 / 98; mask-gated
+  pooling 1274 / 182 / 144 (worse, p < 0.001). Weight averaging (EMA 0.999, 0.9999) changed nothing on validation.
+- **Data** (same number of steps): 2 times the scenes 1344 / 149 / 107; 3 times 1349 / 150 / 101; added hand and
+  heavy-clutter scenes 1348 / 145 / 107. With the verifier at 0.7 they equal the baseline with the verifier.
+
+```
+flow/remote_eval.sh NAME REMOTE_MODEL [STEPS] [EVAL_SET] [WEIGHTS] [SOLVER] ["EXTRA"]   # proposals on linbox01, tracker here
+flow/remote_eval.sh e2_ver70 flow/runs/rnode/model_fm.pt 4 eval2 model rk4 "--verifier flow/runs/verifier/model.pt --min-score 0.7"
+python -m flow.compare flow/data/eval_e2_base flow/data/eval_e2_ver70
+python -m flow.verifier --flow flow/runs/rnode/model_fm.pt --run flow/runs/verifier        # on the GPU machine, 35 min
+```
+
 ## Not done
 
 - No real data. The noise model is a guess; the result says the approach is worth real recordings, not that it works
