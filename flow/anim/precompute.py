@@ -1,9 +1,9 @@
 """Data for the animations, from the real pipeline: one scene of flow/data/eval2 run through the trained flow
-(flow/runs/rnode/model_fm.pt) and the verifier (flow/runs/verifier/model.pt), with the solver trajectories kept.
+(flow/runs/flow/model.pt) and the verifier (flow/runs/verifier/model.pt), with the solver trajectories kept.
 
     .venv/bin/python -m flow.anim.precompute [--scene 1451]          # from the repository root; writes assets/scene.npz
 
-The two stages are repeated here line by line from flow.infer_rnode.propose (same seeds, same random numbers) so that
+The two stages are repeated here line by line from flow.propose.propose (same seeds, same random numbers) so that
 the stage-1 trajectories can be stored; the result is checked against propose() itself. Nothing under flow/ is
 modified. The animations read only assets/scene.npz (and need neither torch nor flow/data)."""
 import argparse
@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .. import geom, infer, infer_rnode, rnode, scene, verifier as V
+from .. import geom, model, propose, scene, verifier as V
 from ..make_data import load_eval
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,15 +32,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", type=int, default=1451)
     ap.add_argument("--eval", default="flow/data/eval2")
-    ap.add_argument("--model", default="flow/runs/rnode/model_fm.pt")
+    ap.add_argument("--model", default="flow/runs/flow/model.pt")
     ap.add_argument("--verifier", default="flow/runs/verifier/model.pt")
     ap.add_argument("--min-score", type=float, default=0.85)
     ap.add_argument("--out", default=str(HERE / "assets/scene.npz"))
     a = ap.parse_args()
     dev = torch.device("cpu")
-    net = infer_rnode.load_model(ROOT / a.model, dev)
+    net = model.load(ROOT / a.model, dev)
     ver = V.load(ROOT / a.verifier, dev)
-    table = torch.from_numpy(np.load(ROOT / "flow/data/rnode_table.npy")).to(dev)
+    table = torch.from_numpy(np.load(ROOT / "flow/data/table.npy")).to(dev)
     rig = scene.Rig()
     for i, cat, T, depth, labels in load_eval(ROOT / a.eval):
         if i == a.scene:
@@ -50,19 +50,19 @@ def main():
     q_true = geom.quat_from_R(T[:3, :3])
     print(f"scene {i} ({cat}): {len(P)} points, {int(L.sum())} on the object")
 
-    # ---- the two stages, as infer_rnode.propose(seed = scene index, RK4 x 4)
+    # ---- the two stages, as propose.propose(seed = scene index, RK4 x 4)
     def run(solver, steps):
         rng = np.random.default_rng(i)
         g = torch.Generator(device=dev).manual_seed(i)
-        S = infer.seeds_fps(P, 32, rng)
+        S = propose.seeds_fps(P, 32, rng)
 
         def objfrac(X, c, ok, q, p):
-            seg = rnode.field(net, table, X, c, q, p, 0.0)[3]
+            seg = model.field(net, table, X, c, q, p, 0.0)[1]
             return (((torch.sigmoid(seg) > 0.5) & ok).float().sum(1) / ok.float().sum(1).clamp_min(1)).cpu().numpy()
 
-        X, c, ok = infer_rnode._sets(P, C, S, rng, dev, g)
+        X, c, ok = propose.point_sets(P, C, S, rng, dev, g)
         qb = geom.qrand(len(S), dev, g)
-        q1, p1, tr1 = rnode.generate(net, table, X, c, qb, torch.zeros(len(S), 3), steps, trajectory=True, solver=solver)
+        q1, p1, tr1 = model.generate(net, table, X, c, qb, torch.zeros(len(S), 3), steps, trajectory=True, solver=solver)
         of1 = objfrac(X, c, ok, q1, p1)
         e = p1.numpy().astype(np.float64) + S
         clusters = []
@@ -75,11 +75,11 @@ def main():
                 clusters.append([j])
         clusters.sort(key=lambda cl: -sum(of1[j] for j in cl))
         cen = np.stack([np.average(e[cl], axis=0, weights=of1[cl] + 1e-3) for cl in clusters[:4]])
-        Q0, cover = infer.orientations(32)
-        X, c, ok = infer_rnode._sets(P, C, cen, rng, dev, g)
+        Q0, cover = propose.orientations(32)
+        X, c, ok = propose.point_sets(P, C, cen, rng, dev, g)
         rep = np.repeat(np.arange(len(cen)), 32)
         qb = torch.from_numpy(np.tile(Q0, (len(cen), 1)).astype(np.float32))
-        qe, pe, tr2 = rnode.generate(net, table, X[rep], c[rep], qb, torch.zeros(len(rep), 3), steps, trajectory=True, solver=solver)
+        qe, pe, tr2 = model.generate(net, table, X[rep], c[rep], qb, torch.zeros(len(rep), 3), steps, trajectory=True, solver=solver)
         qi, pi = V.icp(table, X[rep], qe, pe)
         score = torch.sigmoid(ver(table, X[rep], c[rep], qi, pi)).numpy()
         of_flow = objfrac(X[rep], c[rep], ok[rep], qe, pe)
@@ -97,7 +97,7 @@ def main():
     r = run("rk4", 4)
     # Euler x 8 from the same stage-2 starts (same crops, same 32 orientations at the same 4 positions)
     qb = torch.from_numpy(np.tile(r["Q0"], (len(r["cen"]), 1)).astype(np.float32))
-    _, _, tre = rnode.generate(net, table, r["X"][r["rep"]], r["c"][r["rep"]], qb, torch.zeros(len(r["rep"]), 3), 8, trajectory=True, solver="euler")
+    _, _, tre = model.generate(net, table, r["X"][r["rep"]], r["c"][r["rep"]], qb, torch.zeros(len(r["rep"]), 3), 8, trajectory=True, solver="euler")
     eu_q = np.stack([x.numpy() for x, _ in tre])
     eu_p = np.stack([y.numpy() for _, y in tre]) + r["cen"][r["rep"]][None]
     dq_e = np.degrees(2 * np.arccos(np.clip(np.abs((eu_q[-1] * r["tr2_q"][-1]).sum(-1)), 0, 1)))
@@ -108,11 +108,11 @@ def main():
           "; kept groups have", [int((r["cl_id"] == k).sum()) for k in range(len(r["cen"]))], "seeds")
 
     # ---- check against the real function, without and with the verifier
-    h0 = infer_rnode.propose(net, table, rig, depth, dev, seed=i)
-    h1 = infer_rnode.propose(net, table, rig, depth, dev, seed=i, verifier=ver, min_score=a.min_score)
+    h0 = propose.propose(net, table, rig, depth, dev, seed=i)
+    h1 = propose.propose(net, table, rig, depth, dev, seed=i, verifier=ver, min_score=a.min_score)
     assert np.allclose(h0["q"], r["q_flow"], atol=1e-5) and np.allclose(h0["p"], r["p_flow"], atol=1e-6), "stage 2 differs from propose()"
     assert np.allclose(h1["q"], r["q_icp"], atol=1e-5) and np.allclose(h1["score"], r["score"], atol=1e-5), "verifier path differs"
-    sel0, sel1 = infer.hint_order(h0, 16), infer.hint_order(h1, 16)
+    sel0, sel1 = propose.hint_order(h0, 16), propose.hint_order(h1, 16)
     grp0 = np.full(128, -1)
     for k, gmem in enumerate(h0["groups"]):
         grp0[gmem] = k
@@ -153,13 +153,13 @@ def main():
     for k in range(len(tq) - 1):
         eta = geom.qlog(geom.qmul(geom.qconj(tq[k:k + 1]), tq[k + 1:k + 2]))
         for s in np.linspace(0, 1, 16, endpoint=k == len(tq) - 2):
-            dense_q.append(geom.qmul(tq[k:k + 1], rnode.qexp(s * eta))[0])
+            dense_q.append(geom.qmul(tq[k:k + 1], model.qexp(s * eta))[0])
             dense_p.append((1 - s) * tp[k] + s * tp[k + 1])
     dq, dp = torch.stack(dense_q).float(), torch.stack(dense_p).float()
     xm = (X - dp[:, None]) @ geom.qmat(dq)                                   # [K, 512, 3] body frame
-    e = rnode.lookup(table, xm)
-    feat = rnode.features(table, xm, cc.expand(len(dq), -1))
-    seg = torch.sigmoid(rnode.field(net, table, X.expand(len(dq), -1, -1), cc.expand(len(dq), -1), dq, dp, 0.0)[3])
+    e = model.lookup(table, xm)
+    feat = model.features(table, xm, cc.expand(len(dq), -1))
+    seg = torch.sigmoid(model.field(net, table, X.expand(len(dq), -1, -1), cc.expand(len(dq), -1), dq, dp, 0.0)[1])
     print(f"feature scene: hypothesis {j}, start {ang0[j]:.0f} deg from the truth, end {er0[j]:.1f} deg {ep0[j]:.1f} mm; "
           f"{int(lab[ok].sum())} of {int(ok.sum())} points on the object; seg accuracy at the end {((seg[-1].numpy() > 0.5) == lab)[ok].mean():.2f}")
 

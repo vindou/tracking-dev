@@ -36,6 +36,10 @@ Added on 2026-11-24 (LitePT speed work), also inside `~/tracking-flow/`: `bench_
 `wait_gpu.sh` (waits for free GPU memory), `bench*.jsonl`, `bench*.log`, `wait.log`, `eval_*.log`, `queue.txt.bak`,
 run `flow/runs/litept_t_rig`, result folders `flow/data/eval_e2_litept_t*`. No package was installed.
 
+Not yet updated to the cleaned code of 2026-11-25: `~/tracking-flow/flow/` still holds the old module names
+(`rnode.py`, `infer_rnode.py`, `train_rnode.py`, ...). Before the next run there, copy `flow/*.py` again and copy
+`flow/runs/rnode/model_fm.pt` to `flow/runs/flow/model.pt` and `flow/data/rnode_table.npy` to `flow/data/table.npy`.
+
 Nothing outside `~/tracking-flow/` was changed. The GPU is shared: two early runs at batch 128 ran out of memory
 while another user's job was on it.
 
@@ -57,6 +61,7 @@ while another user's job was on it.
 | `.venv/` (2026-11-24, animations in `flow/anim/`; they also read fonts and run `latex` from the existing TeX Live, nothing installed there) | added `manim` 0.22.1 (Manim Community) and its dependencies: `av`, `beautifulsoup4`, `cloup`, `Cython`, `decorator`, `glcontext`, `isosurfaces`, `ManimPango`, `mapbox_earcut`, `moderngl`, `moderngl-window`, `pycairo`, `pydub`, `pyglet`, `pyglm`, `pyobjc-core`, `pyobjc-framework-Cocoa`, `scipy`, `screeninfo`, `skia-pathops`, `soupsieve`, `srt`, `svgelements`, `watchdog`. No installed package changed version. Nothing system-wide: ffmpeg, cairo, pango and LaTeX were already present. `.venv/` is now 1.5 GB | ignored |
 | `flow/anim/media/` (2026-11-24) | rendered animation videos and manim's intermediate files | ignored |
 | `flow/data/eval_demo/` (2026-11-25) | proposals of the frozen model (baseline network + verifier at 0.85) made on the Mac for the 1,600 scenes, tracker results, and the demo's cache of field plots (`fields/`, grows as scenes are viewed) | ignored |
+| `flow/runs/flow/model.pt`, `flow/data/table.npy` (2026-11-25, cleanup of `flow/`) | copies of `flow/runs/rnode/model_fm.pt` and `flow/data/rnode_table.npy` under the names the cleaned code uses (the frozen model). The old runs (`flow/runs/a`, `abl`, `rnode`) and the result folders of the experiments (`flow/data/eval_e2_*`, `eval_fm_*`, `eval_rnode*`, `eval_smooth_*`, `eval_c4`) are no longer used by the flow code and can be deleted, except `eval_e2_base` and `eval_e2_ver85`, which `flow/anim/precompute.py` reads | ignored |
 | `.gitignore` | entries for `.venv/`, `third_party_src/`, `viewer/poses.csv`, `viewer/demo_logs/` | yes |
 
 Note: `.gitignore` also ignores `*.log` and `*.out`, so most files in `tracker/logs/` would not be committed as they

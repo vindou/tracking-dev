@@ -1,7 +1,7 @@
 """Viser demo: the classical search of the tracker against the learned proposals (flow + verifier), on the
 evaluation scenes. Both end in the same ICP and fit check of the tracker.
 
-    python -m flow.evaluate --eval flow/data/eval_demo --device mps      # once: hypotheses, tracker runs, results.json
+    python -m flow.evaluate --eval flow/data/eval_demo                   # once: hypotheses, tracker runs, results.json
     python -m flow.demo [--port 8090]                                     # then open http://localhost:8090
 
 Per scene it shows the cloud of the depth pair, the true pose (green wireframe), the pose the classical search
@@ -36,7 +36,7 @@ import torch
 import trimesh
 import viser
 
-from . import evaluate, geom, infer, infer_rnode, rnode, scene, verifier as V
+from . import evaluate, geom, model, propose, scene
 
 ROOT = Path(__file__).resolve().parents[1]
 FILTERS = ("all scenes", "classical fails, learned succeeds", "classical succeeds, learned fails", "both succeed", "both fail",
@@ -150,7 +150,7 @@ def field_frames(net, table, rig, P, C, T_ref, dev, steps):
     G, (i, j) = FIELD_GRID, FIELD_AXES
     N = G * G
     c = T_ref[:3, :3] @ rig.centroid + T_ref[:3, 3]
-    X, cam, _ = infer_rnode._sets(P, C, c[None], np.random.default_rng(0), dev, torch.Generator(device=dev).manual_seed(0))
+    X, cam, _ = propose.point_sets(P, C, c[None], np.random.default_rng(0), dev, torch.Generator(device=dev).manual_seed(0))
     X, cam = X.expand(2 * N, -1, -1), cam.expand(2 * N, *cam.shape[1:])
     g = np.linspace(-FIELD_POS_HALF, FIELD_POS_HALF, G)
     A, B = np.meshgrid(g, g, indexing="xy")
@@ -161,14 +161,14 @@ def field_frames(net, table, rig, P, C, T_ref, dev, steps):
     rv = np.zeros((2 * N, 3), np.float32)
     rv[N:, i], rv[N:, j] = A.ravel(), B.ravel()
     q_ref = torch.from_numpy(geom.quat_from_R(T_ref[:3, :3]).astype(np.float32)).to(dev)[None].expand(2 * N, -1)
-    q = geom.qmul(q_ref, rnode.qexp(torch.from_numpy(rv).to(dev)))
+    q = geom.qmul(q_ref, model.qexp(torch.from_numpy(rv).to(dev)))
     p = torch.from_numpy(off).to(dev)
     out = {k: [] for k in ("pos_mm", "pos_u", "pos_v", "rot_deg", "rot_u", "rot_v")}
     h = 1.0 / steps
     for s in range(steps):
-        f = rnode.field(net, table, X, cam, q, p, rnode.T_END * (1 - s * h))[0]
-        v = -(geom.qmat(q) @ f[:, 3:, None]).squeeze(-1) * rnode.POS_SCALE                 # motion per unit time, rig frame (m)
-        q2 = geom.qmul(q, rnode.qexp(-h * f[:, :3]))                                       # after one step of the rotation
+        f = model.field(net, table, X, cam, q, p, model.T_END * (1 - s * h))[0]
+        v = -(geom.qmat(q) @ f[:, 3:, None]).squeeze(-1) * model.POS_SCALE                 # motion per unit time, rig frame (m)
+        q2 = geom.qmul(q, model.qexp(-h * f[:, :3]))                                       # after one step of the rotation
         d = (geom.qlog(geom.qmul(geom.qconj(q_ref), q2)) - torch.from_numpy(rv).to(dev)).cpu().numpy()
         d[np.linalg.norm(d, axis=1) > 2.8] = 0                                             # the chart wraps
         v, w = v.cpu().numpy(), f[:, :3].norm(dim=-1).rad2deg().cpu().numpy()
@@ -205,10 +205,10 @@ def results_table(table):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="flow/runs/rnode/model_fm.pt")
-    ap.add_argument("--verifier", default="flow/runs/verifier/model.pt")
-    ap.add_argument("--min-score", type=float, default=0.85)
-    ap.add_argument("--table", default="flow/data/rnode_table.npy")
+    ap.add_argument("--model", default=propose.MODEL)
+    ap.add_argument("--verifier", default=propose.VERIFIER)
+    ap.add_argument("--min-score", type=float, default=propose.MIN_SCORE)
+    ap.add_argument("--table", default=propose.TABLE)
     ap.add_argument("--eval", default="flow/data/eval_demo")
     ap.add_argument("--port", type=int, default=8090)
     ap.add_argument("--k", type=int, default=32)
@@ -229,9 +229,7 @@ def main():
     raw = np.memmap(ev / "scenes.bin", dtype=np.uint8, mode="r")
     rec = 128 + 4 * n_px
     dev = torch.device(a.device)
-    net = infer_rnode.load_model(ROOT / a.model, dev)
-    ver = V.load(ROOT / a.verifier, dev)
-    table = torch.from_numpy(np.load(ROOT / a.table)).to(dev)
+    net, ver, table = propose.load(dev, a.model, a.verifier, a.table)
     rig = scene.Rig()
     STEPS = a.solver_steps
 
@@ -438,8 +436,8 @@ def main():
             return
         # phase 2: verifier (refinement of each hypothesis on its own points, then the score)
         score, keep = h["score"], h["score"] >= a.min_score
-        handed = infer.hint_order(h, a.hints)
-        phase.content = (f"### 2 · Verifier: refine, then score\nEach hypothesis is refined on its own {rnode.N_POINTS} points "
+        handed = propose.hint_order(h, a.hints)
+        phase.content = (f"### 2 · Verifier: refine, then score\nEach hypothesis is refined on its own {model.N_POINTS} points "
                          "(6 point-to-plane steps), then a second small network scores the refined pose (0 to 1)." + clock(ms_flow))
 
         def draw_refine(w):
@@ -554,7 +552,7 @@ def main():
             if c_follow.value and not replay_only:
                 for cl in server.get_clients().values():
                     aim(cl)
-            h = infer_rnode.propose(net, table, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, solver_steps=STEPS,
+            h = propose.propose(net, table, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, solver_steps=STEPS,
                                     seed=s["scene"], trajectory=True, verifier=ver, min_score=a.min_score)
             fr = cached_field_frames(net, table, rig, ev, s["scene"], P, C, np.array(T), dev, STEPS)
             state["last"] = (np.array(T), h, fr)

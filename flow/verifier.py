@@ -13,7 +13,7 @@ gains (GenPose energy ranking, FoundationPose pose ranking, MegaPose coarse scor
                the kinds of start the inference uses, plus perturbed true poses, all refined with icp() and labelled by
                their error after refinement.
 
-   python -m flow.verifier --flow flow/runs/rnode/model_fm.pt --run flow/runs/verifier"""
+   python -m flow.verifier --flow flow/runs/flow/model.pt --run flow/runs/verifier"""
 import argparse
 import json
 import math
@@ -25,8 +25,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import geom, rnode, train_rnode as T
-from .model import POS_SCALE, mlp
+from . import geom, model, train as T
+from .model import mlp
 
 N_MODEL = 256
 OK_MM, OK_DEG = 10.0, 10.0
@@ -35,9 +35,9 @@ OK_MM, OK_DEG = 10.0, 10.0
 def model_points(table, n=N_MODEL):
     """n points of the model surface with their normals [n, 6], from the closest-point table (farthest-point order)."""
     G = table.shape[0]
-    a = (torch.arange(G, device=table.device) + 0.5) / G * 2 * rnode.TABLE_HALF - rnode.TABLE_HALF
+    a = (torch.arange(G, device=table.device) + 0.5) / G * 2 * model.TABLE_HALF - model.TABLE_HALF
     cen = torch.stack(torch.meshgrid(a, a, a, indexing="ij"), -1)
-    near = (table[..., :3] - cen).norm(dim=-1) < rnode.TABLE_HALF / G          # cells that contain the surface
+    near = (table[..., :3] - cen).norm(dim=-1) < model.TABLE_HALF / G          # cells that contain the surface
     cand = table[near]
     cand = cand[torch.randperm(len(cand), generator=torch.Generator().manual_seed(0))[:20000].to(cand.device)]
     idx = [0]
@@ -55,7 +55,7 @@ def icp(table, pts, q, p, iters=6, d0=0.020, d1=0.008):
     eye = 1e-6 * torch.eye(6, device=pts.device, dtype=pts.dtype)
     for i in range(iters):
         xm = (pts - p[:, None]) @ geom.qmat(q)
-        e = rnode.lookup(table, xm)
+        e = model.lookup(table, xm)
         cp, n = e[..., :3], e[..., 3:]
         dmax = d0 + (d1 - d0) * i / max(1, iters - 1)
         w = ((cp - xm).norm(dim=-1) < dmax).to(pts.dtype)
@@ -67,7 +67,7 @@ def icp(table, pts, q, p, iters=6, d0=0.020, d1=0.008):
         delta = torch.linalg.solve_ex(H.cpu().double(), g.cpu().double()[..., None]).result.squeeze(-1).to(pts)     # 6 x 6, float64: on the CPU (no float64 on MPS)
         usable = (w.sum(1) >= 12) & torch.isfinite(delta).all(-1) & (delta.norm(dim=-1) < 1.0)
         delta = torch.where(usable[:, None], delta, torch.zeros_like(delta))
-        q = geom.qmul(q, rnode.qexp(delta[:, :3]))
+        q = geom.qmul(q, model.qexp(delta[:, :3]))
         q = q / q.norm(dim=-1, keepdim=True)
         p = p + (geom.qmat(q) @ delta[:, 3:, None]).squeeze(-1)
     return q, p
@@ -78,7 +78,7 @@ class Verifier(nn.Module):
         super().__init__()
         self.register_buffer("model_pts", model_pts)
         b = 128 * w
-        self.cloud1 = mlp([rnode.N_FEAT, 64 * w, 128 * w, b], norm=False)
+        self.cloud1 = mlp([model.N_FEAT, 64 * w, 128 * w, b], norm=False)
         self.cloud2 = mlp([2 * b, 256 * w, 256 * w], norm=False)
         self.model1 = mlp([3 + 3 + 3, 64 * w, b], norm=False)
         self.model2 = mlp([2 * b, 256 * w], norm=False)
@@ -87,15 +87,15 @@ class Verifier(nn.Module):
     def forward(self, table, pts, cam, q, p):
         R = geom.qmat(q)
         xm = (pts - p[:, None]) @ R
-        f = self.cloud1(rnode.features(table, xm, cam))
+        f = self.cloud1(model.features(table, xm, cam))
         h = self.cloud2(torch.cat([f, f.max(1, keepdim=True).values.expand_as(f)], -1))
         # the model points in the frame of the cloud: distance and direction to the nearest cloud point, bounded
         mp, mn = self.model_pts[None, :, :3], self.model_pts[None, :, 3:]
         d, j = torch.cdist(mp.expand(len(xm), -1, -1), xm).min(dim=-1)
         near = torch.gather(xm, 1, j[..., None].expand(-1, -1, 3))
-        v = (near - mp) / rnode.RES_SCALE
-        dn = d[..., None] / rnode.RES_SCALE
-        m = self.model1(torch.cat([mp.expand(len(xm), -1, -1) / rnode.SET_RADIUS, mn.expand(len(xm), -1, -1), v * torch.tanh(dn) / (dn + 1e-6)], -1))
+        v = (near - mp) / model.RES_SCALE
+        dn = d[..., None] / model.RES_SCALE
+        m = self.model1(torch.cat([mp.expand(len(xm), -1, -1) / model.SET_RADIUS, mn.expand(len(xm), -1, -1), v * torch.tanh(dn) / (dn + 1e-6)], -1))
         k = self.model2(torch.cat([m, m.max(1, keepdim=True).values.expand_as(m)], -1))
         return self.head(torch.cat([h.max(1).values, h.mean(1), k.max(1).values, k.mean(1)], -1)).squeeze(-1)
 
@@ -116,12 +116,12 @@ def candidates(flow, table, P, cam, q1, p1, per_scene, g=None):
     kind = torch.arange(M, device=dev) % 4                                    # 0: truth + noise, 1, 2: far start, 3: base
     rn = lambda *s: torch.randn(*s, device=dev, generator=g)
     q_far = geom.qrand(M, dev, g)
-    q_base, p_base = rnode.sample_base(q1[rep], p1[rep], g)
+    q_base, p_base = model.sample_source(q1[rep], p1[rep], g)
     qs = torch.where((kind == 3)[:, None], q_base, q_far)
     ps = torch.where((kind == 3)[:, None], p_base, p1[rep] + rn(M, 3) * 0.025)
-    qf, pf = rnode.generate(flow, table, P[rep], cam[rep], qs, ps, 4, solver="euler")
+    qf, pf = model.generate(flow, table, P[rep], cam[rep], qs, ps, 4, solver="euler")
     scale = torch.rand(M, 1, device=dev, generator=g)                          # spread of the perturbation: up to 12 deg, 12 mm
-    qn = geom.qmul(q1[rep], rnode.qexp(rn(M, 3) * scale * 0.12))
+    qn = geom.qmul(q1[rep], model.qexp(rn(M, 3) * scale * 0.12))
     pn = p1[rep] + rn(M, 3) * scale * 0.007
     q0 = torch.where((kind == 0)[:, None], qn, qf)
     p0 = torch.where((kind == 0)[:, None], pn, pf)
@@ -170,10 +170,10 @@ def load(path, dev):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--flow", default="flow/runs/rnode/model_fm.pt", help="the flow model whose outputs are judged")
+    ap.add_argument("--flow", default="flow/runs/flow/model.pt", help="the flow model whose outputs are judged")
     ap.add_argument("--run", default="flow/runs/verifier")
     ap.add_argument("--data", default="flow/data/train")
-    ap.add_argument("--table", default="flow/data/rnode_table.npy")
+    ap.add_argument("--table", default="flow/data/table.npy")
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--batch", type=int, default=48, help="scenes per step")
     ap.add_argument("--per-scene", type=int, default=8)
@@ -188,7 +188,7 @@ def main():
     run = Path(a.run)
     run.mkdir(parents=True, exist_ok=True)
     table = torch.from_numpy(np.load(a.table)).to(dev)
-    flow = rnode.net_from_checkpoint(torch.load(a.flow, map_location=dev), dev)
+    flow = model.load(a.flow, dev)
     d = T.load(a.data)
     S = len(d["n"])
     net = Verifier(model_points(table)).to(dev)
