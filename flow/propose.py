@@ -5,10 +5,10 @@ writes <eval>/hints.bin for tracker/build-mac/trk_hint_eval and <eval>/flow.npz 
 
 The source of the flow is centred on the true pose, which is not known here, so the starts are not source samples:
   1. Position: k seeds spread over the cloud; from each, a start with a random rotation at the seed is integrated to
-     t = 0. The end positions are grouped (30 mm); the `centers` groups with the most object points (per-point output
+     t = 0 (4 Euler steps). The end positions are grouped (30 mm); the `centers` groups with the most object points (per-point output
      of the network at the end pose) are kept and become the seeds of stage 2.
   2. Pose: per seed, n_orient starts at the seed with the rotations of a set spread evenly over SO(3) (covering
-     radius 63 degrees; the source has 34 degrees standard deviation), integrated to t = 0.
+     radius 63 degrees; the source has 34 degrees standard deviation), integrated to t = 0 (8 Euler steps).
   3. Verifier: every end pose is refined on its own points (verifier.icp) and scored; poses below the minimum score
      are dropped. Poses that agree (15 mm, 15 degrees) are grouped; the best of each group goes to the tracker,
      highest score first (TrackerCore::set_hints), which runs its own ICP and fit check."""
@@ -26,6 +26,9 @@ from .make_data import MAX_PTS, STORE_RADIUS, load_eval
 ROOT = Path(__file__).resolve().parents[1]
 MODEL, VERIFIER, TABLE = "flow/runs/flow/model.pt", "flow/runs/verifier/model.pt", "flow/data/table.npy"
 MIN_SCORE = 0.85
+# The solver of the deployed configuration: Euler, 4 steps in the position stage and 8 in the pose stage (13
+# evaluations with the object logits). Through the tracker it equals 4 Runge-Kutta steps in both (33 evaluations).
+SOLVER, SOLVER_STEPS, STAGE1_STEPS = "euler", 8, 4
 
 
 def seeds_fps(P, k, rng, voxel=0.03, min_pts=4):
@@ -104,12 +107,15 @@ def point_sets(P, C, seeds, rng, dev, generator):
 
 
 @torch.no_grad()
-def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_steps=4, seed=0, trajectory=False,
-            verifier=None, min_score=MIN_SCORE):
+def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_steps=SOLVER_STEPS, seed=0, trajectory=False,
+            verifier=None, min_score=MIN_SCORE, solver=SOLVER, stage1_steps=STAGE1_STEPS, engine=None):
     """Depth pair -> hypotheses. Dictionary: q, p (centroid, rig frame), T (4x4 rig-from-object) of the K hypotheses
     (refined, if there is a verifier), score (verifier, or None), objfrac (share of points the network calls
     object), groups (see group()), seeds, seed_end, centers, timings, and with trajectory = True the states of the
-    stage-2 flow (traj_q, traj_p: first = start, last = end of the flow, before the refinement)."""
+    stage-2 flow (traj_q, traj_p: first = start, last = end of the flow, before the refinement).
+    With an engine the networks are not run here: engine.stage1(pts, cam, q) -> q, p, seg and
+    engine.stage2(pts [centres, N, 3], cam, rep, q) -> refined q, p and scores (flow/trt_eval.py: TensorRT on the
+    Jetson); objfrac of the hypotheses is then zero."""
     t0 = time.perf_counter()
     rng = np.random.default_rng(seed)
     g = torch.Generator(device=dev).manual_seed(seed)
@@ -129,8 +135,12 @@ def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_st
     X, c, ok = point_sets(P, C, S, rng, dev, g)
     t1 = time.perf_counter()
     qb = geom.qrand(len(S), dev, g)                   # starts: a random rotation at the seed
-    q1, p1 = model.generate(net, table, X, c, qb, torch.zeros(len(S), 3, device=dev), solver_steps)
-    of1 = objfrac(X, c, ok, q1, p1)
+    if engine is not None:
+        q1, p1, seg = engine.stage1(X, c, qb)
+        of1 = (((seg > 0) & ok).float().sum(1) / ok.float().sum(1).clamp_min(1)).cpu().numpy()
+    else:
+        q1, p1 = model.generate(net, table, X, c, qb, torch.zeros(len(S), 3, device=dev), stage1_steps or solver_steps, solver=solver)
+        of1 = objfrac(X, c, ok, q1, p1)
     e = p1.cpu().numpy().astype(np.float64) + S
     t2 = time.perf_counter()
     clusters = []
@@ -150,13 +160,17 @@ def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_st
     K = len(rep)
     t3 = time.perf_counter()
     qb = torch.from_numpy(np.tile(Q0, (len(cen), 1)).astype(np.float32)).to(dev)
-    r = model.generate(net, table, X[rep], c[rep], qb, torch.zeros(K, 3, device=dev), solver_steps, trajectory=trajectory)
-    qe, pe = r[0], r[1]
-    score = None
-    if verifier is not None:        # refine every hypothesis on its points, then judge the refined pose
-        qe, pe = V.icp(table, X[rep], qe, pe)
-        score = torch.sigmoid(verifier(table, X[rep], c[rep], qe, pe)).cpu().numpy()
-    of = objfrac(X[rep], c[rep], ok[rep], qe, pe)
+    if engine is not None:
+        qe, pe, score = engine.stage2(X, c, rep, qb)
+        of, trajectory = np.zeros(K), False
+    else:
+        r = model.generate(net, table, X[rep], c[rep], qb, torch.zeros(K, 3, device=dev), solver_steps, trajectory=trajectory, solver=solver)
+        qe, pe = r[0], r[1]
+        score = None
+        if verifier is not None:        # refine every hypothesis on its points, then judge the refined pose
+            qe, pe = V.icp(table, X[rep], qe, pe)
+            score = torch.sigmoid(verifier(table, X[rep], c[rep], qe, pe)).cpu().numpy()
+        of = objfrac(X[rep], c[rep], ok[rep], qe, pe)
     q, p = qe.cpu().numpy().astype(np.float64), pe.cpu().numpy().astype(np.float64) + cen[rep]
     t4 = time.perf_counter()
     R = geom.qmat(torch.from_numpy(q)).numpy()
@@ -180,12 +194,17 @@ def hint_order(h, n):
     return reps[:n]
 
 
-def write_hints(ev, rig, proposer, n_hints):
+DUMP_K = 128
+
+
+def write_hints(ev, rig, proposer, n_hints, dump=None):
     """Runs proposer(index, depth) -> hypotheses dict on every scene of the evaluation set ev; writes hints.bin (for
     trk_hint_eval) and flow.npz (diagnostics against the truth), prints a summary per kind of scene."""
     rows, blobs = [], []
     for i, cat, T, depth, _ in load_eval(ev):
         h = proposer(i, depth)
+        if dump is not None:        # every hypothesis of the scene, for flow.simulate
+            dump.append({k: h[k] for k in ("q", "p", "T", "score", "traj_q", "traj_p", "centers") if h.get(k) is not None})
         sel = hint_order(h, n_hints)
         c = T[:3, :3] @ rig.centroid + T[:3, 3]
         ep = np.linalg.norm(h["p"] - c, axis=1) * 1000 if len(h["p"]) else np.zeros(0)
@@ -234,14 +253,22 @@ def main():
     ap.add_argument("--hints", type=int, default=16)
     ap.add_argument("--centers", type=int, default=4)
     ap.add_argument("--orient", type=int, default=32)
-    ap.add_argument("--solver-steps", type=int, default=4)
+    ap.add_argument("--solver-steps", type=int, default=SOLVER_STEPS)
+    ap.add_argument("--solver", default=SOLVER, choices=["rk4", "euler"])
+    ap.add_argument("--stage1-steps", type=int, default=STAGE1_STEPS, help="steps of the position stage (0: as --solver-steps)")
+    ap.add_argument("--dump", action="store_true", help="also write <eval>/hyp.pkl: all hypotheses and their flow states (flow.simulate)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     a = ap.parse_args()
     dev = torch.device(a.device)
     net, ver, table = load(dev, a.model, "" if a.no_verifier else a.verifier, a.table)
     rig = scene.Rig()
+    dump = [] if a.dump else None
     write_hints(ROOT / a.eval, rig, lambda i, depth: propose(net, table, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient,
-                                                           solver_steps=a.solver_steps, seed=i, verifier=ver, min_score=a.min_score), a.hints)
+                                                           solver_steps=a.solver_steps, seed=i, verifier=ver, min_score=a.min_score,
+                                                           solver=a.solver, stage1_steps=a.stage1_steps or None, trajectory=a.dump), a.hints, dump)
+    if a.dump:
+        import pickle
+        pickle.dump(dump, open(ROOT / a.eval / "hyp.pkl", "wb"))
 
 
 if __name__ == "__main__":

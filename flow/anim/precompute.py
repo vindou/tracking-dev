@@ -108,8 +108,8 @@ def main():
           "; kept groups have", [int((r["cl_id"] == k).sum()) for k in range(len(r["cen"]))], "seeds")
 
     # ---- check against the real function, without and with the verifier
-    h0 = propose.propose(net, table, rig, depth, dev, seed=i)
-    h1 = propose.propose(net, table, rig, depth, dev, seed=i, verifier=ver, min_score=a.min_score)
+    h0 = propose.propose(net, table, rig, depth, dev, seed=i, solver="rk4", solver_steps=4, stage1_steps=4)
+    h1 = propose.propose(net, table, rig, depth, dev, seed=i, verifier=ver, min_score=a.min_score, solver="rk4", solver_steps=4, stage1_steps=4)
     assert np.allclose(h0["q"], r["q_flow"], atol=1e-5) and np.allclose(h0["p"], r["p_flow"], atol=1e-6), "stage 2 differs from propose()"
     assert np.allclose(h1["q"], r["q_icp"], atol=1e-5) and np.allclose(h1["score"], r["score"], atol=1e-5), "verifier path differs"
     sel0, sel1 = propose.hint_order(h0, 16), propose.hint_order(h1, 16)

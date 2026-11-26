@@ -553,7 +553,7 @@ def main():
                 for cl in server.get_clients().values():
                     aim(cl)
             h = propose.propose(net, table, rig, depth, dev, k=a.k, centers=a.centers, n_orient=a.orient, solver_steps=STEPS,
-                                    seed=s["scene"], trajectory=True, verifier=ver, min_score=a.min_score)
+                                    solver="rk4", stage1_steps=STEPS, seed=s["scene"], trajectory=True, verifier=ver, min_score=a.min_score)
             fr = cached_field_frames(net, table, rig, ev, s["scene"], P, C, np.array(T), dev, STEPS)
             state["last"] = (np.array(T), h, fr)
         animate(gen, h)

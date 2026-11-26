@@ -4,8 +4,9 @@ A network trained only on synthetic depth data proposes where the object is, a s
 proposals it does not believe, and the tracker's own ICP and fit check decide. This folder holds the one model that
 is meant to be deployed, its training, its evaluation through the tracker core, and a viser demo.
 
-Status: evaluated on synthetic scenes through the tracker core on the Mac. Not connected to the live tracker, not
-tested on real data, not timed on the Jetson (see "Not done").
+Status: evaluated on synthetic scenes through the tracker core on the Mac, with the networks run either in PyTorch
+on the Mac or as TensorRT engines on the Jetson (about 170 ms per depth pair there). Not connected to the live
+tracker, not tested on real data (see "Not done").
 
 ## Result (1,600 synthetic scenes, 320 per kind; `flow/data/eval2`)
 
@@ -29,9 +30,45 @@ of the truth; wrong = accepted and farther; none = nothing accepted. Both column
 - The weak kind is heavy clutter: 34 of the 42 wrong poses.
 - The classical numbers are without a background map (`trk_bgmap`), the tracker's intended defence against static
   structure; a hand or a rod cannot be mapped.
+- The table is the model with its first solver (4 Runge-Kutta steps per stage). The deployed configuration uses
+  Euler steps and gives the same result within the noise; see "Deployed configuration".
 - If the learned path hands nothing over, the tracker continues with the classical search. Counting that: about 1420 /
   60 / 120 (the classical part varies by a few scenes between runs).
 - The minimum score of the verifier (0.85) was chosen on this same set; the figure is not confirmed on fresh scenes.
+
+## Deployed configuration (Jetson Orin Nano, TensorRT 10.3, 25 W mode)
+
+Same weights as the table above; what changed is how they are run.
+
+- **Solver.** Euler: 4 steps in the position stage, 8 in the pose stage (13 network evaluations with the object
+  logits, instead of 33). These are the defaults of `propose.py`.
+- **Graph.** The network is rearranged for TensorRT (`export.FastNet`): the part of the 448 -> 256 layer that is the
+  same for all points of a hypothesis is computed once per hypothesis, and the per-point layers are 1 x 1
+  convolutions on a 16 x 32 grid with pooling layers. Same outputs as the model (below 0.01 degrees in PyTorch).
+- **Precision.** float16 engines.
+
+| run (1,600 scenes) | correct / wrong / none |
+|---|---|
+| Mac, PyTorch, 4 Runge-Kutta steps in both stages (the table above) | 1404 / 42 / 154 |
+| Mac, PyTorch, Euler 4 + 8 | 1401 / 44 / 155 |
+| Jetson, TensorRT float32, Euler 4 + 8 | 1394 / 41 / 165 |
+| Jetson, TensorRT float16, Euler 4 + 8 (deployed) | 1395 / 42 / 163 |
+
+The two Jetson runs have identical inputs and differ in 25 scenes (+13 -12 correct). The Jetson and Mac runs use
+different random numbers; their differences are within the noise floor (p = 0.35 to 0.57, paired sign test).
+
+Time per depth pair on the Jetson, networks only (median over the 1,600 scenes, including the copies between the
+engines; preparing the cloud, the seeds and the point sets is not included and was not timed there):
+
+| | position stage | pose stage, refinement, verifier | sum |
+|---|---|---|---|
+| float16 | 23 ms | 150 ms | 173 ms |
+| float32 | 34 ms | 228 ms | 261 ms |
+
+The first export (model as written, 4 Runge-Kutta steps, float16) took about 415 ms. Tried and not adopted: handing
+over one position at a time and stopping at the first the tracker accepts (about 60 ms typical; simulated: 1393 / 46
+/ 161, but 12 more wrong poses among structures); merging hypotheses that have converged (they do not converge before
+the refinement); builder optimization levels 4 and 5, CUDA graphs and mixed precision (8 % at best).
 
 ## How it works
 
@@ -40,7 +77,8 @@ Pose z = (q, p): rotation of the object in the rig frame and position of the mod
 - **Flow** (`model.py`). A vector field on SO(3) x R^3, trained by flow matching: the network regresses the
   velocity of the geodesic from the true pose (t = 0) to a source sample (t = 1). The source is centred on the true
   pose (34 degrees, 40 mm), so it cannot be sampled at inference; inference starts from a set of orientations at
-  candidate positions. Solver: 4 Runge-Kutta steps from t = 1 to t = 0 (16 network evaluations).
+  candidate positions. Solver: fixed steps from t = 1 to t = 0 (Euler by default, see above; `solver="rk4"` for
+  Runge-Kutta).
 - **Input.** 512 measured points within 0.16 m of a seed position, in the body frame of the current pose. Per
   point, 19 numbers: position, camera, the vector to the closest point of the CAD surface with its normal, the
   point-to-plane residual r, and r n, r (x cross n) (the terms of an ICP step). The closest-point table is a 128^3
@@ -78,6 +116,10 @@ and cylinders. None of the noise parameters was fitted to recordings of the real
 | `scene.py`, `make_data.py`, `geom.py` | synthetic scenes, data sets, rotations |
 | `tests.py` | checks of the mathematics |
 | `remote_eval.sh` | proposals on the GPU machine, tracker runs on the Mac |
+| `export.py` | ONNX graphs for TensorRT (`FastNet`: the rearranged network), inputs and reference outputs of scenes |
+| `trt_run.py`, `trt_eval.py` | runs the engines on the Jetson (numpy and `tensorrt` only); the evaluation set through them and the tracker |
+| `jetson_time.sh`, `jetson_tune*.sh`, `jetson_fast*.sh` | engine builds and timing experiments on the Jetson (`trtexec`) |
+| `simulate.py` | stopping early and merging, simulated from the hypotheses of a finished run |
 | `anim/` | animations that explain the method (their own README) |
 
 Models and data are not in git: `flow/runs/flow/model.pt` (flow), `flow/runs/verifier/model.pt` (verifier),
@@ -97,7 +139,13 @@ python -m flow.verifier --flow flow/runs/flow/model.pt --run flow/runs/verifier 
 .venv/bin/python -m flow.evaluate --eval flow/data/eval_demo          # proposals (about 50 min on an M2), tracker runs, table
 .venv/bin/python -m flow.compare flow/data/eval_A flow/data/eval_B    # paired comparison, first folder = reference
 .venv/bin/python -m flow.demo                                         # http://localhost:8090
+# Jetson (ssh jetson): graphs, engines, then the evaluation set through the engines
+.venv/bin/python -m flow.export                                       # flow/runs/export/*.onnx
+flow/jetson_time.sh && flow/jetson_fast.sh start stage1e:stage1 stage2e:stage2    # builds refine, score, stage1e, stage2e (detached; fast.done)
+.venv/bin/python -m flow.trt_eval --tags fp16                         # about 25 min; flow/data/eval_trt_fp16
 ```
+
+The demo and the animations show the stored Runge-Kutta run (`flow/data/eval_demo`) and call the solver explicitly.
 
 An evaluation folder holds links to `scenes.bin`, `meta.npz` and `baseline.csv` of the scene set
 (`flow/remote_eval.sh` makes them). Compare models through the tracker, not on the validation numbers of the
@@ -116,8 +164,8 @@ the verifier is 1359 / 142 / 99, and two seeds of it differ by +31 -34 scenes (t
   flow-matching warm start alone.
 - **Verifier threshold.** Reorder only 1344 / 163 / 93; 0.5: 1403 / 62 / 135; 0.7: 1407 / 51 / 142; 0.85:
   1407 / 42 / 151; 0.95: 1389 / 32 / 179.
-- **Solver.** Euler x 8 equals RK4 x 4 at half the evaluations (1364 / 142 / 94); Euler x 4 is 1346 / 151 / 103.
-  `model.generate(..., solver="euler")` is kept because the verifier is trained on Euler x 4 outputs.
+- **Solver** (without the verifier). Euler x 8 equals RK4 x 4 at half the evaluations (1364 / 142 / 94); Euler x 4
+  in both stages is 1346 / 151 / 103. The verifier is trained on Euler x 4 outputs.
 - **Encoders.** Lean Point Networks (Le et al., arXiv 1907.00960): 1345 / 177 / 78. LitePT (Yue et al., arXiv
   2512.13689), small: 1355 / 167 / 78 with cells in the body frame, 1351 / 184 / 65 with cells in the rig frame.
   Both better on validation, no more correct poses through the tracker, significantly more wrong ones; with the
@@ -131,9 +179,9 @@ the verifier is 1359 / 142 / 99, and two seeds of it differ by +31 -34 scenes (t
 
 - No real data. The noise model is a guess; the result says the approach is worth real recordings, not that it works
   on them.
-- No live path: there is no hint buffer and no inference process on the Jetson.
-- No export and no timing of this model on the Jetson. On the RTX 4090 one stage-2 solve (128 hypotheses, 16
-  evaluations) takes 53 ms without the verifier; on the M2 a whole proposal takes 1 to 3.6 s.
+- No live path: there is no hint buffer and no inference process on the Jetson. `trt_run.py` runs the engines on
+  files of prepared inputs; the cloud, the seeds, the point sets and the grouping still run in Python on the Mac.
+- On the M2 a whole proposal takes 1 to 3.6 s with the Runge-Kutta solver.
 - No uncertainty output for the filter.
 - The remaining wrong poses pass both the verifier and the tracker's fit check; most are in heavy clutter.
 - One training run of each network, one object.

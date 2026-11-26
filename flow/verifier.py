@@ -48,10 +48,31 @@ def model_points(table, n=N_MODEL):
     return cand[idx].clone()
 
 
+def solve6(H, g):
+    """H x = g for symmetric positive definite H [B, 6, 6] by elimination without pivoting, written out so that it
+    exports to ONNX (float32)."""
+    A = [[H[:, i, j] for j in range(6)] for i in range(6)]
+    b = [g[:, i] for i in range(6)]
+    for k in range(6):
+        for i in range(k + 1, 6):
+            f = A[i][k] / A[k][k]
+            for j in range(k + 1, 6):
+                A[i][j] = A[i][j] - f * A[k][j]
+            b[i] = b[i] - f * b[k]
+    x = [None] * 6
+    for i in reversed(range(6)):
+        s = b[i]
+        for j in range(i + 1, 6):
+            s = s - A[i][j] * x[j]
+        x[i] = s / A[i][i]
+    return torch.stack(x, -1)
+
+
 @torch.no_grad()
-def icp(table, pts, q, p, iters=6, d0=0.020, d1=0.008):
+def icp(table, pts, q, p, iters=6, d0=0.020, d1=0.008, export=False):
     """Point-to-plane Gauss-Newton steps of the pose (q, p) on the points pts [B, N, 3]; correspondences from the
-    table, used within a distance that shrinks from d0 to d1. Returns q, p."""
+    table, used within a distance that shrinks from d0 to d1. Returns q, p. export = True: the same steps with
+    operations that export to ONNX and a float32 solve (flow/export.py)."""
     eye = 1e-6 * torch.eye(6, device=pts.device, dtype=pts.dtype)
     for i in range(iters):
         xm = (pts - p[:, None]) @ geom.qmat(q)
@@ -61,11 +82,18 @@ def icp(table, pts, q, p, iters=6, d0=0.020, d1=0.008):
         w = ((cp - xm).norm(dim=-1) < dmax).to(pts.dtype)
         r = ((xm - cp) * n).sum(-1)
         A = torch.cat([torch.cross(xm, n, dim=-1), n], -1)                    # d r / d (rotation, translation), body frame
-        H = torch.einsum("bn,bni,bnj->bij", w, A, A)
-        H = H + eye * (1.0 + 1e3 * torch.diagonal(H, dim1=1, dim2=2).mean(-1))[:, None, None]      # damping relative to the scale
-        g = torch.einsum("bn,bni,bn->bi", w, A, r)
-        delta = torch.linalg.solve_ex(H.cpu().double(), g.cpu().double()[..., None]).result.squeeze(-1).to(pts)     # 6 x 6, float64: on the CPU (no float64 on MPS)
-        usable = (w.sum(1) >= 12) & torch.isfinite(delta).all(-1) & (delta.norm(dim=-1) < 1.0)
+        if export:
+            wA = w[..., None] * A
+            H = wA.transpose(1, 2) @ A
+            H = H + eye * (1.0 + 1e3 * (H * torch.eye(6, device=pts.device, dtype=pts.dtype)).sum((1, 2)) / 6.0)[:, None, None]
+            delta = solve6(H, (wA * r[..., None]).sum(1))
+            usable = (w.sum(1) >= 12) & (delta.pow(2).sum(-1) < 1.0)          # a NaN compares false
+        else:
+            H = torch.einsum("bn,bni,bnj->bij", w, A, A)
+            H = H + eye * (1.0 + 1e3 * torch.diagonal(H, dim1=1, dim2=2).mean(-1))[:, None, None]      # damping relative to the scale
+            g = torch.einsum("bn,bni,bn->bi", w, A, r)
+            delta = torch.linalg.solve_ex(H.cpu().double(), g.cpu().double()[..., None]).result.squeeze(-1).to(pts)     # 6 x 6, float64: on the CPU (no float64 on MPS)
+            usable = (w.sum(1) >= 12) & torch.isfinite(delta).all(-1) & (delta.norm(dim=-1) < 1.0)
         delta = torch.where(usable[:, None], delta, torch.zeros_like(delta))
         q = geom.qmul(q, model.qexp(delta[:, :3]))
         q = q / q.norm(dim=-1, keepdim=True)
