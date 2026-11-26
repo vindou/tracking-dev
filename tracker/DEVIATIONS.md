@@ -228,3 +228,11 @@ are interpretations of open points.
     network that makes the hypotheses is in `../flow` (Python, PyTorch) and is not part of the tracker programs.
     Without hints the search cycle is the same code path as before (the 20 earlier tests pass unchanged).
 
+49. **Addition - live path for the pose hypotheses (2026-11-26, user request).** DESIGN section 13, "Live path": the
+    hint record and ring `/trk_hints`, read by `trk_tracker` in search state (`hints` in the configuration,
+    `--no-hints`); two bytes of the pose record's reserved area (`hints_tried`, `by_hint`; the pose CSV has two more
+    columns at the end); the shared library `trk_flowio` (C interface for the inference process); the test source
+    `trk_scenes`. All code is compiled position-independent so that the static libraries can go into the shared one.
+    The tracker programs still link only Eigen, nanoflann and the capture library; TensorRT is linked only by
+    `../flow/live/trk_flow`. The 21 unit tests pass on the Mac after the change; the long-run and timing tests of
+    TEST_REPORT.md were not repeated.

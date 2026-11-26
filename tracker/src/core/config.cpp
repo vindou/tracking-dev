@@ -110,6 +110,9 @@ bool load_tracker_config(const std::string& path, TrackerConfig& c, std::string&
     if (st["search_early_accept"].type() == Json::Bool) c.search_early_accept = st["search_early_accept"].boolean();
     num(st, "early_accept_min_fitness", c.early_min_fitness);
     num(st, "early_accept_max_violation", c.early_max_violation);
+    const Json& hi = j["hints"];
+    str(hi, "buffer", c.hint_buffer);
+    num(hi, "max_age_ms", c.hint_max_age_ms);
     num(j, "cloud_rate_hz", c.cloud_rate_hz);
     if (j["cloud_content"].type() == Json::String) c.cloud_scene = j["cloud_content"].str() != "solver";
     const Json& br = j["bridge"];

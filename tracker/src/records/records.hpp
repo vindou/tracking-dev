@@ -70,7 +70,9 @@ struct PoseRecord {                      // 640 bytes
     uint64_t pairs_skipped;              // 608 total pairs not used (newer pair available, torn read)
     uint32_t rejected_in_row;            // 616 consecutive rejected cycles
     float free_space_violation;          // 620 fraction of checked model points that the cameras see through
-    uint8_t reserved[16];                // 624
+    uint8_t hints_tried;                 // 624 external pose hypotheses tried in this cycle (search state; DESIGN.md 13)
+    uint8_t by_hint;                     // 625 1: the pose accepted in this cycle started from an external hypothesis
+    uint8_t reserved[14];                // 626
 };
 static_assert(sizeof(PoseRecord) == 640, "layout");
 static_assert(offsetof(PoseRecord, covariance) == 232, "layout");
@@ -103,6 +105,32 @@ struct CloudRecord {                     // 64 + 8192 * 16 = 131136 bytes
 static_assert(sizeof(CloudPoint) == 16, "layout");
 static_assert(sizeof(CloudRecord) == 64 + 16 * kCloudMaxPoints, "layout");
 static_assert(offsetof(CloudRecord, points) == 64, "layout");
+
+// ----------------------------------------------------------------------------------------------- hint record
+// Pose hypotheses from an external source (the flow module, ../flow/live.py) for the tracker in search state.
+constexpr uint32_t kHintRecordVersion = 1;
+constexpr const char* kHintRecordType = "hints";
+constexpr uint32_t kHintSlots = 4;
+constexpr uint32_t kHintMax = 16;
+
+struct HintRecord {                      // 64 + 64 + 16 * 128 = 2176 bytes
+    uint32_t version;                    // 0   kHintRecordVersion
+    uint32_t count;                      // 4   valid entries (0 .. kHintMax), best first
+    uint64_t hint_seq;                   // 8   0, 1, 2, ... per writer instance
+    uint64_t pair_seq;                   // 16  pair the hypotheses were computed from
+    uint64_t capture_instance_id;        // 24  writer instance of that pair buffer
+    int64_t meas_time_mono_ns;           // 32  mean capture time of that pair, CLOCK_MONOTONIC (as in the pose record)
+    int64_t publish_time_mono_ns;        // 40  CLOCK_MONOTONIC just before the record is published
+    float prep_ms;                       // 48  cloud, seeds and point sets
+    float net_ms;                        // 52  networks (position stage, pose stage, refinement, verifier)
+    float post_ms;                       // 56  grouping
+    uint32_t hypotheses;                 // 60  hypotheses the verifier scored
+    float score[kHintMax];               // 64  verifier score of each entry
+    double T_rig_from_object[kHintMax][16];   // 128 row-major 4x4
+};
+static_assert(sizeof(HintRecord) == 2176, "layout");
+static_assert(offsetof(HintRecord, score) == 64, "layout");
+static_assert(offsetof(HintRecord, T_rig_from_object) == 128, "layout");
 
 // ----------------------------------------------------------------------------------------------- network
 constexpr uint32_t kNetMagic = 0x4E4B5254;   // "TRKN"

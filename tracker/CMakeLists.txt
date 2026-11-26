@@ -23,6 +23,9 @@ if(TRK_ASAN)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+# Position-independent code everywhere: the static libraries are also linked into the shared library trk_flowio.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # The capture library (pair-buffer layout, attach, liveness), built from ../capture without changes.
 set(CAPTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../capture" CACHE PATH "capture source directory")
 set(CMAKE_DISABLE_FIND_PACKAGE_realsense2 ON)
@@ -61,7 +64,7 @@ target_link_libraries(trk_tests PRIVATE trk_core)
 
 file(GLOB TRK_APPS CONFIGURE_DEPENDS src/apps/*.cpp)
 # Live programs (signals, threads named with the Linux API) are built on Linux only; the Mac builds tests and tools.
-set(TRK_LINUX_ONLY trk_tracker trk_bridge trk_record trk_replay trk_posedump trk_camid trk_calib trk_bgmap)
+set(TRK_LINUX_ONLY trk_tracker trk_bridge trk_record trk_replay trk_posedump trk_camid trk_calib trk_bgmap trk_scenes)
 foreach(app ${TRK_APPS})
   get_filename_component(n ${app} NAME_WE)
   if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" AND n IN_LIST TRK_LINUX_ONLY)
@@ -72,3 +75,8 @@ foreach(app ${TRK_APPS})
   target_link_libraries(${n} PRIVATE trk_core)
 endforeach()
 target_compile_definitions(trk_tests PRIVATE TRK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+# C interface for the inference process of the flow module (../flow/live.py loads it with ctypes).
+add_library(trk_flowio SHARED src/flowio/flowio.cpp)
+target_compile_options(trk_flowio PRIVATE ${TRK_WARN})
+target_link_libraries(trk_flowio PRIVATE trk_core)

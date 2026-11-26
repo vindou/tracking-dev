@@ -682,8 +682,11 @@ void TrackerCore::process(const cap::PairRecord& rec, const uint16_t* const img[
     if (state_ == kStateSearch) {
         hints_tried_ = 0;
         bool ok = n_hints_ > 0 && try_hints(pose);
+        const bool by_hint = ok;
         if (ok) search_idx_ = 0;
         else ok = search_step(t3, pose);
+        pose.hints_tried = uint8_t(hints_tried_);
+        pose.by_hint = by_hint ? 1 : 0;
         icp_ran = true;
         t4 = mono_ns();
         if (ok) {

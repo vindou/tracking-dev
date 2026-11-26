@@ -4,9 +4,10 @@ A network trained only on synthetic depth data proposes where the object is, a s
 proposals it does not believe, and the tracker's own ICP and fit check decide. This folder holds the one model that
 is meant to be deployed, its training, its evaluation through the tracker core, and a viser demo.
 
-Status: evaluated on synthetic scenes through the tracker core on the Mac, with the networks run either in PyTorch
-on the Mac or as TensorRT engines on the Jetson (about 170 ms per depth pair there). Not connected to the live
-tracker, not tested on real data (see "Not done").
+Status: evaluated on synthetic scenes through the tracker core on the Mac, and live on the Jetson: an inference
+process (`live/trk_flow`, C++ with TensorRT) feeds the tracker's hint buffer while the tracker searches, tested with
+synthetic scenes played into the pair buffer (about 175 ms per depth pair). Not tested with the cameras or on real
+data (see "Not done").
 
 ## Result (1,600 synthetic scenes, 320 per kind; `flow/data/eval2`)
 
@@ -70,6 +71,43 @@ over one position at a time and stopping at the first the tracker accepts (about
 / 161, but 12 more wrong poses among structures); merging hypotheses that have converged (they do not converge before
 the refinement); builder optimization levels 4 and 5, CUDA graphs and mixed precision (8 % at best).
 
+## Live path on the Jetson
+
+`live/trk_flow` reads the newest depth pair from the capture buffer while the tracker is in search state, computes
+the hypotheses and publishes up to 16 in the hint buffer `/trk_hints`; the tracker tries them in its next search
+cycle if they are at most 400 ms old (tracker/DESIGN.md section 13). It is the pipeline of `propose.py` in C++ with
+the four engines; `live.py` is the same in Python (numpy) and was the reference for it.
+
+The same 1,600 scenes through the whole process on the Jetson, hints judged by `trk_hint_eval` on the Mac:
+
+| process | correct / wrong / none | ms per pair, median (p90) | of which outside the networks (median by kind) |
+|---|---|---|---|
+| `trt_run.py` engines, preparation in PyTorch on the Mac | 1395 / 42 / 163 | 173 (networks only) | not timed |
+| `live.py` (numpy) | 1388 / 50 / 162 | 211 (314) | 24 to 116 |
+| `live/trk_flow` (C++) | 1402 / 43 / 155 | 175 (191) | 2 to 15 |
+
+The three use different random numbers; the differences are within the noise floor.
+
+Live test (`live_test.sh`): 200 scenes (every 8th, 40 per kind), each shown for 2 s after 0.7 s of empty images, in
+the pair buffer at 90 Hz, with the tracker and the inference process running together on the Jetson. First pose the
+tracker accepts while the scene is shown:
+
+| | correct / wrong / none | scene appears -> pose published, median (p90) | accepted from a hypothesis |
+|---|---|---|---|
+| tracker alone | 112 / 17 / 71 | 835 ms (860) | - |
+| with `live.py` | 181 / 7 / 12 | 305 ms (891) | 183 |
+| with `live/trk_flow` | 179 / 10 / 11 | 269 ms (310) | 186 |
+
+- By kind, with `trk_flow` against the tracker alone: structures 35 / 4 / 1 against 1 / 9 / 30, everything 29 / 5 / 6
+  against 7 / 4 / 29, hand 35 / 1 / 4 against 28 / 2 / 10.
+- A proposal reaches the tracker 253 ms (median) after its pair was captured; running next to the tracker the
+  networks take about 195 ms instead of 172.
+- The tracker's search cycle is unchanged (p50 6.7 ms against 7.5); the cycle that tries the hypotheses takes 6.8 ms
+  (median), at most 49 ms.
+- About a third of the hint records are not used because they are older than 400 ms when the tracker next searches
+  (a proposal finished after the tracker had already found the object).
+- One run of each; the scenes are static and synthetic.
+
 ## How it works
 
 Pose z = (q, p): rotation of the object in the rig frame and position of the model centroid.
@@ -119,6 +157,9 @@ and cylinders. None of the noise parameters was fitted to recordings of the real
 | `export.py` | ONNX graphs for TensorRT (`FastNet`: the rearranged network), inputs and reference outputs of scenes |
 | `trt_run.py`, `trt_eval.py` | runs the engines on the Jetson (numpy and `tensorrt` only); the evaluation set through them and the tracker |
 | `jetson_time.sh`, `jetson_tune*.sh`, `jetson_fast*.sh` | engine builds and timing experiments on the Jetson (`trtexec`) |
+| `live/` | `trk_flow`: the inference process on the Jetson (C++, TensorRT); `build_jetson.sh` |
+| `live.py` | the same process in Python (numpy, no torch); reference for `trk_flow` |
+| `live_test.sh`, `live_eval.py` | live test on the Jetson without cameras, and its table |
 | `simulate.py` | stopping early and merging, simulated from the hypotheses of a finished run |
 | `anim/` | animations that explain the method (their own README) |
 
@@ -143,6 +184,11 @@ python -m flow.verifier --flow flow/runs/flow/model.pt --run flow/runs/verifier 
 .venv/bin/python -m flow.export                                       # flow/runs/export/*.onnx
 flow/jetson_time.sh && flow/jetson_fast.sh start stage1e:stage1 stage2e:stage2    # builds refine, score, stage1e, stage2e (detached; fast.done)
 .venv/bin/python -m flow.trt_eval --tags fp16                         # about 25 min; flow/data/eval_trt_fp16
+# live path: tracker and inference process on the Jetson
+tracker/tools/sync_to_jetson.sh && flow/live/build_jetson.sh          # ~/tracker/build, ~/flow_live/build/trk_flow
+flow/live_test.sh && .venv/bin/python -m flow.live_eval               # 200 scenes with and without hints, about 20 min
+# by hand on the Jetson, next to d435_capture and trk_tracker:
+#   ~/flow_live/build/trk_flow --config ~/tracker/config/tracker.json --engines ~/flow_probe/frozen
 ```
 
 The demo and the animations show the stored Runge-Kutta run (`flow/data/eval_demo`) and call the solver explicitly.
@@ -179,8 +225,8 @@ the verifier is 1359 / 142 / 99, and two seeds of it differ by +31 -34 scenes (t
 
 - No real data. The noise model is a guess; the result says the approach is worth real recordings, not that it works
   on them.
-- No live path: there is no hint buffer and no inference process on the Jetson. `trt_run.py` runs the engines on
-  files of prepared inputs; the cloud, the seeds, the point sets and the grouping still run in Python on the Mac.
+- The live path was run only with synthetic static scenes played into the pair buffer, not with the cameras, a
+  moving object, a background map or a calibration file. `trk_flow` is not in `viewer/demo.sh`.
 - On the M2 a whole proposal takes 1 to 3.6 s with the Runge-Kutta solver.
 - No uncertainty output for the filter.
 - The remaining wrong poses pass both the verifier and the tracker's fit check; most are in heavy clutter.

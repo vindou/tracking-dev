@@ -247,5 +247,34 @@ passes, the normal search runs in the same cycle; without hints the cycle is unc
 `../flow` (a learned flow on SE(3)); they only choose where ICP starts, every accepted pose still passes the same
 fit check. The hint ICP runs are not time-sliced in this version (12 hypotheses: about 12 refine steps in one cycle).
 `trk_hint_eval` runs the core on independent static scenes with and without hypotheses (formats in its header).
-The live programs do not call `set_hints` yet (no hint buffer; see `../flow/README.md`, "Not done").
+
+### Live path (added 2026-11-26)
+
+```
+d435_capture -> /d435_pairs --+--> trk_tracker --> /trk_pose, /trk_cloud
+                              |        ^  reads the newest hint record while in search state
+                              +--> trk_flow (../flow/live) --> /trk_hints (4 slots, hint record)
+```
+
+- **Hint record** (`records.hpp`, version 1, 2176 bytes): count, hint sequence number, pair sequence number and
+  writer instance of the pair used, its measurement time (as in the pose record), publish time, timings, then up to
+  16 scores and poses `T_rig_from_object`, best first. Ring `/trk_hints` (`hints.buffer`), same protocol as the other
+  rings.
+- **Inference process** `trk_flow` (`../flow/live/trk_flow.cpp`; TensorRT, not part of the tracker programs). While
+  the newest pose record says search, it takes the newest pair, computes the hypotheses and publishes them. It gets
+  everything from the tracker side through the C interface `src/flowio` (library `trk_flowio`): configuration and
+  calibration, the pair reader (`PairSource`), the cloud for the network (every 2nd pixel, work volume), the state of
+  the tracker and the hint writer. The cloud of the cloud buffer is not used: thinned to 8192 points it has about
+  300 points near the object in cluttered scenes, and the network takes 512.
+- **Tracker loop** (`trk_tracker`). In search state, before the pair is read: `latest()` on the hint ring (attach
+  attempts at most twice per second, in search state only). A record is given to `set_hints` if its measurement time
+  is at most `hints.max_age_ms` (400) old; older records are counted as stale (typically a proposal that was finished
+  after the tracker had found the object by itself). No writer: the cycle is unchanged. `--no-hints` switches the
+  reading off.
+- **Pose record**: `hints_tried` (offset 624) and `by_hint` (625), from the reserved bytes; record version unchanged.
+- **Cost in the tracker**: the cycle that tries the hypotheses is not time-sliced: median 6.8 ms, maximum 49 ms in the
+  live test (16 hypotheses at most).
+- **Test without cameras**: `trk_scenes` shows scenes of a scenes file in the pair buffer (empty images for 0.7 s,
+  then the scene for 2 s); `../flow/live_test.sh` runs it with the tracker and the inference process on the Jetson,
+  with and without hints (results: `../flow/README.md`).
 
