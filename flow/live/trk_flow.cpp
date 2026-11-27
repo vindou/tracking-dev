@@ -12,7 +12,9 @@
 //   3. position stage (engine stage1e): per seed 512 random points within 0.16 m and a random start rotation; the
 //      end positions are grouped (30 mm) and the 4 groups with the most object points become the positions
 //   4. pose stage (engines stage2e, refine, score): per position 32 start orientations; flow, 6 point-to-plane steps,
-//      verifier. The three engines share their buffers on the device.
+//      verifier. The three engines share their buffers on the device. With a single position (a scene with nothing
+//      but the object) the engines stage2e1, refine1, score1 for 32 hypotheses run instead, if DIR has them
+//      (flow/jetson_deploy.sh); the result is the same, the 96 copies are not computed.
 //   5. hypotheses with a score of at least 0.85, grouped (15 mm, 15 degrees), the best of each group, highest first
 // Scenes file: the same for every scene of the file (format: tracker/src/apps/trk_hint_eval.cpp), written as a
 // hints file for trk_hint_eval, with the times per scene in <out>.times.csv.
@@ -129,6 +131,12 @@ public:
         Net* nets[4] = {&stage1_, &stage2_, &refine_, &score_};
         for (int i = 0; i < 4; i++)
             if (!nets[i]->load(*rt_, dir + "/" + graphs[i] + "." + tag + ".engine")) return false;
+        const char* graphs1[3] = {"stage2e1", "refine1", "score1"};
+        Net* nets1[3] = {&stage2one_, &refine1_, &score1_};
+        one_ = true;
+        for (const char* g : graphs1) one_ = one_ && std::ifstream(dir + "/" + g + "." + tag + ".engine").good();
+        for (int i = 0; i < 3 && one_; i++)
+            if (!nets1[i]->load(*rt_, dir + "/" + graphs1[i] + "." + tag + ".engine")) return false;
         // device buffers; the pose stage, the refinement and the verifier share points, cameras and poses
         d1_pts_ = dev_alloc(K1 * NP * 3); d1_cam_ = dev_alloc(K1 * NP); d1_q_ = dev_alloc(K1 * 4);
         d1_qo_ = dev_alloc(K1 * 4); d1_po_ = dev_alloc(K1 * 3); d1_seg_ = dev_alloc(K1 * NP);
@@ -143,6 +151,15 @@ public:
         refine_.set("q", d2_qb_, K2 * 4); refine_.set("p", d2_pb_, K2 * 3);
         score_.set("pts_in", d2_pts_, K2 * NP * 3); score_.set("cam_in", d2_cam_, K2 * NP); score_.set("q_in", d2_qb_, K2 * 4);
         score_.set("p_in", d2_pb_, K2 * 3); score_.set("logit", d2_logit_, K2);
+        if (one_) {   // the first 32 rows of the same buffers
+            const int K = ORIENT;
+            stage2one_.set("pts_in", d2_pts_, K * NP * 3); stage2one_.set("cam_in", d2_cam_, K * NP); stage2one_.set("q_in", d2_q0_, K * 4);
+            stage2one_.set("q", d2_qa_, K * 4); stage2one_.set("p", d2_pa_, K * 3);
+            refine1_.set("pts_in", d2_pts_, K * NP * 3); refine1_.set("q_in", d2_qa_, K * 4); refine1_.set("p_in", d2_pa_, K * 3);
+            refine1_.set("q", d2_qb_, K * 4); refine1_.set("p", d2_pb_, K * 3);
+            score1_.set("pts_in", d2_pts_, K * NP * 3); score1_.set("cam_in", d2_cam_, K * NP); score1_.set("q_in", d2_qb_, K * 4);
+            score1_.set("p_in", d2_pb_, K * 3); score1_.set("logit", d2_logit_, K);
+        }
         std::vector<float> q0(K2 * 4);
         for (int k = 0; k < K2; k++) std::memcpy(&q0[std::size_t(k) * 4], kOrient[k % ORIENT], 4 * sizeof(float));
         upload(d2_q0_, q0.data(), q0.size());
@@ -227,7 +244,9 @@ public:
             for (int a = 0; a < 3; a++) cen[c][a] = s[a] / w;
         }
         // pose stage: the point set of each position, 32 times
-        for (int c = 0; c < CENTERS; c++) {
+        const bool single = one_ && nc == 1;
+        const std::size_t rows = single ? ORIENT : K2;
+        for (int c = 0; c < (single ? 1 : CENTERS); c++) {
             float* X = &h2_pts_[std::size_t(c) * ORIENT * NP * 3];
             float* cam = &h2_cam_[std::size_t(c) * ORIENT * NP];
             if (c < nc) {
@@ -243,11 +262,11 @@ public:
             }
         }
         const double t3 = now_ms();
-        upload(d2_pts_, h2_pts_.data(), h2_pts_.size()); upload(d2_cam_, h2_cam_.data(), h2_cam_.size());
-        stage2_.run();
-        refine_.run();
-        score_.run();
-        download(h2_q_.data(), d2_qb_, h2_q_.size()); download(h2_p_.data(), d2_pb_, h2_p_.size()); download(h2_logit_.data(), d2_logit_, h2_logit_.size());
+        upload(d2_pts_, h2_pts_.data(), rows * NP * 3); upload(d2_cam_, h2_cam_.data(), rows * NP);
+        (single ? stage2one_ : stage2_).run();
+        (single ? refine1_ : refine_).run();
+        (single ? score1_ : score_).run();
+        download(h2_q_.data(), d2_qb_, rows * 4); download(h2_p_.data(), d2_pb_, rows * 3); download(h2_logit_.data(), d2_logit_, rows);
         const double t4 = now_ms();
         // hypotheses above the minimum score, best first; one per group of agreeing hypotheses
         const int K = nc * ORIENT;
@@ -297,6 +316,8 @@ public:
         out.net_ms = (t2 - t1) + (t4 - t3);
         out.post_ms = t5 - t4;
     }
+
+    bool one_position() const { return one_; }
 
 private:
     int cell_index(const float* p, int c[3]) const {
@@ -375,7 +396,8 @@ private:
 
     Logger logger_;
     std::unique_ptr<nvinfer1::IRuntime> rt_;
-    Net stage1_, stage2_, refine_, score_;
+    Net stage1_, stage2_, refine_, score_, stage2one_, refine1_, score1_;
+    bool one_ = false;   // the one-position engines are there
     FioInfo info_{};
     void *d1_pts_ = nullptr, *d1_cam_ = nullptr, *d1_q_ = nullptr, *d1_qo_ = nullptr, *d1_po_ = nullptr, *d1_seg_ = nullptr;
     void *d2_pts_ = nullptr, *d2_cam_ = nullptr, *d2_q0_ = nullptr, *d2_qa_ = nullptr, *d2_pa_ = nullptr, *d2_qb_ = nullptr, *d2_pb_ = nullptr, *d2_logit_ = nullptr;
@@ -424,6 +446,7 @@ int main(int argc, char** argv) {
     fio_info(fio, &info);
     std::unique_ptr<Proposer> prop(new Proposer());
     if (!prop->init(engines, tag, info)) return 4;
+    std::printf("flow: engines %s (%s)%s\n", engines.c_str(), tag.c_str(), prop->one_position() ? ", with the one-position engines" : "");
     std::vector<float> P(std::size_t(MAX_CLOUD) * 3);
     std::vector<uint8_t> C(MAX_CLOUD);
     std::unique_ptr<Hints> hints(new Hints());

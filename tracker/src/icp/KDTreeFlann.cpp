@@ -76,5 +76,42 @@ int KDTreeFlann::SearchHybrid1(const Eigen::Vector3d &query, double radius, int 
     return 1;
 }
 
+namespace {
+// Result set for one neighbour with an initial bound (interface of nanoflann's result sets).
+struct BoundedNearest {
+    using DistanceType = double;
+    using IndexType = Eigen::Index;
+    double best;
+    Eigen::Index idx;
+    std::size_t size() const { return idx >= 0 ? 1 : 0; }
+    bool full() const { return true; }
+    bool addPoint(double dist, Eigen::Index index) {
+        if (dist < best) {
+            best = dist;
+            idx = index;
+        }
+        return true;
+    }
+    double worstDist() const { return best; }
+};
+}  // namespace
+
+int KDTreeFlann::SearchBounded1(const Eigen::Vector3d &query, double radius, int seed, int &index, double &distance2) const {
+    if (data_.size() == 0) return -1;
+    BoundedNearest rs{radius * radius, -1};
+    if (seed >= 0) {   // the same distance function as the search uses, so that the values compare exactly
+        const double ds = nanoflann_index3_->index_->distance_.evalMetric(query.data(), Eigen::Index(seed), 3);
+        if (ds < rs.best) {
+            rs.best = ds;
+            rs.idx = seed;
+        }
+    }
+    nanoflann_index3_->index_->findNeighbors(rs, query.data());
+    if (rs.idx < 0) return 0;
+    index = int(rs.idx);
+    distance2 = rs.best;
+    return 1;
+}
+
 }  // namespace geometry
 }  // namespace open3d

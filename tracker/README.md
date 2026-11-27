@@ -107,6 +107,9 @@ the rig frame, from `trk_workvolume`: region both cameras see, 0.2-0.8 m from th
 k = max(5 mm, 0.5 x distance), iterations, convergence); `fit_check` (limits); `filter` (Kalman and orientation filter
 gains); `states` (lost and search thresholds, search time limit 8 ms per cycle, orientations); `bridge` (address
 192.168.55.1, port 9870, queue bytes); `cloud_rate_hz` (30; the task's value is 15, see DEVIATIONS 36); `status_interval_s` (10).
+Optional, with the defaults that keep the behaviour as it was: `hints` (`buffer` "/trk_hints", `max_age_ms` 400,
+`threads` 1); `icp.correspondence_search` ("kdtree"; "bounded", "table_exact", "table": DESIGN.md section 14),
+`icp.table_cell_m` (0.002). `config/bench_noslice.json` is the same file with the search time limit removed (benchmarks).
 
 ## Shared-memory rings (pose and cloud buffers)
 

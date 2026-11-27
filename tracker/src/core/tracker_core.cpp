@@ -1,5 +1,7 @@
 #include "tracker_core.hpp"
 
+#include "../common/prof.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -11,6 +13,7 @@
 namespace trk {
 
 using open3d::pipelines::registration::ICPConvergenceCriteria;
+using open3d::pipelines::registration::ICPWorkspace;
 using open3d::pipelines::registration::RegistrationICPPrealloc;
 using open3d::pipelines::registration::RegistrationResultPrealloc;
 
@@ -52,6 +55,26 @@ bool TrackerCore::init(const TrackerConfig& cfg, std::string& err) {
     sidx_.resize(std::size_t(maxs));
     fflag_.resize(std::size_t(maxp));
     ws_.Reserve(std::size_t(maxs));
+    // correspondence search of every ICP run (config icp.correspondence_search)
+    const int search = cfg.corr_search == "bounded" ? ICPWorkspace::kBounded : cfg.corr_search == "table" ? ICPWorkspace::kTable :
+                       cfg.corr_search == "table_exact" ? ICPWorkspace::kTableExact : ICPWorkspace::kKDTree;
+    if (search == ICPWorkspace::kTable || search == ICPWorkspace::kTableExact)
+        table_.Build(target_, *tree_, cfg.table_cell, *std::max_element(cfg.distances.begin(), cfg.distances.end()),
+                     search == ICPWorkspace::kTableExact);
+    ws_.search = search;
+    ws_.table = &table_;
+    // hint trials in parallel (config hints.threads): one workspace and one point buffer per worker
+    const int ht = std::max(1, std::min(cfg.hint_threads, 8));
+    hw_.clear();
+    hw_.resize(ht > 1 ? std::size_t(ht) : 0);
+    for (auto& w : hw_) {
+        w.ws.Reserve(std::size_t(maxs));
+        w.ws.search = search;
+        w.ws.table = &table_;
+        w.pts.assign(std::size_t(maxs), Eigen::Vector3d::Zero());
+    }
+    for (auto& v : hint_inlier_) v.assign(ht > 1 ? std::size_t(maxs) : 0, 0);
+    pool_.start(ht);
     orientations_ = search_orientations(cfg.search_orientations);
     cand_.resize(orientations_.size() * kMaxCenters);
     const Vec3 ext = cfg.work_volume.max - cfg.work_volume.min;
@@ -179,6 +202,7 @@ void TrackerCore::crops(CropRect out[2]) {
 }
 
 int TrackerCore::build_cloud(const uint16_t* const img[2]) {
+    TRK_PROF(kBuild);
     npts_ = 0;
     const int cap = int(pts_.size());
     for (int c = 0; c < 2; c++) {
@@ -209,6 +233,7 @@ int TrackerCore::build_cloud(const uint16_t* const img[2]) {
 }
 
 int TrackerCore::filter_cloud(const Mat4* T_obj_rig, double margin) {
+    TRK_PROF(kFilter);
     nf_ = 0;
     Vec3 lo = model_.bmin - Vec3::Constant(margin), hi = model_.bmax + Vec3::Constant(margin);
     Mat3 R = Mat3::Identity();
@@ -255,6 +280,7 @@ int TrackerCore::select_solver_points(int max_points) {
 }
 
 double TrackerCore::visibility(const Mat4& T_rig_obj, int& checked) const {
+    TRK_PROF(kVisibility);
     int seen_through = 0;
     checked = 0;
     for (int c = 0; c < 2; c++) {
@@ -282,6 +308,7 @@ double TrackerCore::visibility(const Mat4& T_rig_obj, int& checked) const {
 }
 
 int TrackerCore::select_points_near(const Vec3& c, double radius, int max_points) {
+    TRK_PROF(kSelect);
     const double r2 = radius * radius;
     int cnt = 0;
     for (int i = 0; i < nf_; i++) cnt += (fpts_[std::size_t(i)] - c).squaredNorm() <= r2;
@@ -307,6 +334,7 @@ int TrackerCore::select_points_near(const Vec3& c, double radius, int max_points
 // (largest extent <= 2 x the object's largest extent) and with enough points, largest first (at most kMaxCenters).
 // Without such a component: the centroid of the whole cloud.
 int TrackerCore::find_search_centers() {
+    TRK_PROF(kCenters);
     std::fill(gcount_.begin(), gcount_.end(), uint16_t(0));
     std::fill(glabel_.begin(), glabel_.end(), -1);
     const Vec3 o = cfg_.work_volume.min;
@@ -439,7 +467,8 @@ int TrackerCore::find_search_centers() {
 }
 
 // Fit check and pose fields of an ICP result (DESIGN.md section 5).
-void TrackerCore::evaluate(const RegistrationResultPrealloc& r, const Mat4* pred, PoseRecord& pose, bool check_jump) {
+void TrackerCore::evaluate_into(const RegistrationResultPrealloc& r, const Mat4* pred, PoseRecord& pose, bool check_jump, int ns,
+                                Mat4& T_out) const {
     const Mat4 T_obj_rig = r.transformation;
     const Mat4 T = inverse_pose(T_obj_rig);
     const Mat3 R = T.block<3, 3>(0, 0);
@@ -447,11 +476,12 @@ void TrackerCore::evaluate(const RegistrationResultPrealloc& r, const Mat4* pred
     quat_from_R(R, pose.icp_orientation);
     pose.fit_rmse = r.inlier_rmse;
     pose.inlier_ratio = r.fitness;
-    pose.point_count = uint32_t(ns_);
+    pose.point_count = uint32_t(ns);
     pose.icp_iterations = uint32_t(r.num_iteration);
     double min_eig = 0;
     Eigen::Matrix<double, 6, 6> C = Eigen::Matrix<double, 6, 6>::Zero();
     if (r.has_system && r.weight_sum > 0) {
+        TRK_PROF(kFitCheck);
         const double L = model_.radius > 0 ? model_.radius : 0.05;
         const Vec3 c = r.centroid;
         Eigen::Matrix<double, 6, 6> A = Eigen::Matrix<double, 6, 6>::Identity();
@@ -472,7 +502,7 @@ void TrackerCore::evaluate(const RegistrationResultPrealloc& r, const Mat4* pred
     for (int i = 0; i < 36; i++) pose.covariance[i] = C(i / 6, i % 6);
     pose.min_eigenvalue = min_eig;
     uint32_t why = 0;
-    if (ns_ < cfg_.min_points) why |= kRejectFewPoints;
+    if (ns < cfg_.min_points) why |= kRejectFewPoints;
     if (!(r.inlier_rmse <= cfg_.max_rmse) || r.num_corres == 0) why |= kRejectRmse;
     if (!(r.fitness >= cfg_.min_inlier_ratio)) why |= kRejectInliers;
     if (!(min_eig >= cfg_.min_eigenvalue)) why |= kRejectEigen;
@@ -487,11 +517,16 @@ void TrackerCore::evaluate(const RegistrationResultPrealloc& r, const Mat4* pred
     if (checked < cfg_.min_visibility_checked || viol > cfg_.max_violation) why |= kRejectVisibility;
     pose.reject_reasons = why;
     pose.valid = why == 0 ? 1 : 0;
-    last_icp_T_rig_obj_ = T;
+    T_out = T;
+}
+
+void TrackerCore::evaluate(const RegistrationResultPrealloc& r, const Mat4* pred, PoseRecord& pose, bool check_jump) {
+    evaluate_into(r, pred, pose, check_jump, ns_, last_icp_T_rig_obj_);
 }
 
 // One time slice of the search (DESIGN.md section 7). Returns true when a candidate was accepted (pose valid).
 bool TrackerCore::search_step(int64_t t_start, PoseRecord& pose) {
+    TRK_PROF_CTX(kSearch);
     if (search_idx_ == 0) {   // new round: start positions from the current cloud
         find_search_centers();
         have_best_ = false;
@@ -607,7 +642,88 @@ void TrackerCore::set_hints(const Mat4* T_rig_obj, int n, bool in_order) {
 
 // External pose hypotheses (flow module): full ICP from each on the points near its position, the fit check of the
 // search (no jump test); the best passing one (fitness minus free-space violations, then RMSE) is accepted.
+// The points select_points_near() would put into spts_, written to out (no other state touched).
+int TrackerCore::select_near_into(const Vec3& c, double radius, int max_points, Eigen::Vector3d* out) const {
+    const double r2 = radius * radius;
+    int cnt = 0;
+    for (int i = 0; i < nf_; i++) cnt += (fpts_[std::size_t(i)] - c).squaredNorm() <= r2;
+    max_points = std::min<int>(max_points, int(spts_.size()));
+    const double step = cnt > max_points ? double(cnt) / double(max_points) : 1.0;
+    int k = 0, n = 0;
+    double next = 0;
+    for (int i = 0; i < nf_ && n < max_points; i++) {
+        if ((fpts_[std::size_t(i)] - c).squaredNorm() > r2) continue;
+        if (double(k++) + 1e-9 >= next) {
+            out[n++] = fpts_[std::size_t(i)];
+            next += step;
+        }
+    }
+    return n;
+}
+
+// One hint on one worker: what the loop body of try_hints() does, into hres_[i].
+void TrackerCore::hint_job(int i, int worker) {
+    HintWorker& w = hw_[std::size_t(worker)];
+    HintResult& out = hres_[i];
+    const Vec3 c = hints_[i].block<3, 3>(0, 0) * model_.centroid + hints_[i].block<3, 1>(0, 3);
+    out.c = c;
+    out.ran = false;
+    out.valid = false;
+    out.ns = select_near_into(c, model_.radius + 0.02, cfg_.solver_points_search, w.pts.data());
+    if (out.ns < cfg_.min_points) return;
+    const ICPConvergenceCriteria crit(cfg_.rel_fitness, cfg_.rel_rmse, cfg_.max_iterations);
+    out.r = RegistrationICPPrealloc(w.pts.data(), std::size_t(out.ns), target_, *tree_, cfg_.distances.data(), int(cfg_.distances.size()),
+                                    inverse_pose(hints_[i]), kptr_, crit, w.ws);
+    PoseRecord tmp;
+    std::memset(&tmp, 0, sizeof tmp);
+    evaluate_into(out.r, nullptr, tmp, false, out.ns, out.T);
+    out.score = out.r.fitness - double(tmp.free_space_violation);
+    out.valid = tmp.valid != 0;
+    out.ran = true;
+    std::copy(w.ws.inlier.begin(), w.ws.inlier.end(), hint_inlier_[i].begin());
+}
+
+// try_hints() with the ICP runs of the hints on the pool. The runs are independent; the choice afterwards goes through
+// the hints in their order with the rule of the sequential code, so the result does not depend on the thread timing
+// (equal scores and RMSE: the lower hint index).
+bool TrackerCore::try_hints_parallel(PoseRecord& pose) {
+    TRK_PROF_CTX(kHint);
+    const int n = n_hints_;
+    n_hints_ = 0;
+    hints_tried_ = 0;
+    if (nf_ < cfg_.min_points) return false;
+    pool_.run(n, [](void* self, int job, int worker) { static_cast<TrackerCore*>(self)->hint_job(job, worker); }, this);
+    bool have = false;
+    double best_score = -1, best_rmse = 1e9;
+    Vec3 best_c = Vec3::Zero();
+    int last_ran = -1;
+    for (int i = 0; i < n; i++) {
+        const HintResult& h = hres_[i];
+        hints_tried_++;
+        if (!h.ran) continue;
+        last_ran = i;
+        if (h.valid && (h.score > best_score || (h.score == best_score && h.r.inlier_rmse < best_rmse))) {
+            best_ = h.r;
+            have = true;
+            best_score = h.score;
+            best_rmse = h.r.inlier_rmse;
+            best_c = h.c;
+            if (hints_in_order_) break;
+        }
+    }
+    if (last_ran >= 0) {   // the state the sequential code leaves: flags and pose of the last run
+        ws_.inlier.assign(hint_inlier_[last_ran].begin(), hint_inlier_[last_ran].begin() + hres_[last_ran].ns);
+        last_icp_T_rig_obj_ = hres_[last_ran].T;
+    }
+    if (!have) return false;
+    select_points_near(best_c, model_.radius + 0.02, cfg_.solver_points_search);
+    evaluate(best_, nullptr, pose, false);
+    return pose.valid != 0;
+}
+
 bool TrackerCore::try_hints(PoseRecord& pose) {
+    if (!hw_.empty()) return try_hints_parallel(pose);
+    TRK_PROF_CTX(kHint);
     const int n = n_hints_;
     n_hints_ = 0;
     hints_tried_ = 0;

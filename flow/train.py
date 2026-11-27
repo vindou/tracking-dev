@@ -91,6 +91,7 @@ def main():
     ap.add_argument("--batch", type=int, default=256)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--width", type=int, default=1)
+    ap.add_argument("--act", default="gelu", choices=list(model.ACTIVATIONS), help="activation (relu: the fastest in TensorRT)")
     ap.add_argument("--val", type=int, default=512, help="held-out scenes (the first of the data)")
     ap.add_argument("--val-every", type=int, default=5000)
     ap.add_argument("--warmup", type=int, default=500)
@@ -113,7 +114,7 @@ def main():
     d = load(a.data)
     S = len(d["n"])
     val_idx = torch.arange(a.val)
-    net = model.FlowNet(a.width).to(dev)
+    net = model.FlowNet(a.width, a.act).to(dev)
     print(f"{sum(p.numel() for p in net.parameters()) / 1e6:.2f} M parameters, device {dev}", flush=True)
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     sched = torch.optim.lr_scheduler.LambdaLR(

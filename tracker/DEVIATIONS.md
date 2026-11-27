@@ -236,3 +236,13 @@ are interpretations of open points.
     The tracker programs still link only Eigen, nanoflann and the capture library; TensorRT is linked only by
     `../flow/live/trk_flow`. The 21 unit tests pass on the Mac after the change; the long-run and timing tests of
     TEST_REPORT.md were not repeated.
+
+50. **Addition - switchable CPU paths (2026-11-26, user request).** DESIGN section 14: correspondence search
+    `bounded`, `table_exact` and `table` next to the KD-tree of the port (which stays the default and still passes the
+    Open3D reference test), hint trials on a fixed thread pool (`hints.threads`, default 1 = no pool), a profiling
+    build, the benchmark tools, and the build options `TRK_TUNE` (default on: `-mcpu=cortex-a78ae` on the Jetson) and
+    `TRK_LTO`. Deviations from the original design: with `hints.threads` > 1 the tracker has additional threads
+    (`trk-hint`), which the threads table did not foresee; `table_exact` and `table` add 25 MB / 3.6 MB of memory
+    built at init. `ICPWorkspace` (tracker extension of the port) gained the search mode, the table pointer and the
+    previous correspondences. No new library. The thread-sanitizer build of the tests does not start on the Mac
+    (also at the previous commit); the sanitizer run of the pool tests is part of `tools/bench_cpu_jetson.sh`.

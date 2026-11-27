@@ -1,0 +1,66 @@
+{
+ "version": 1,
+ "pair_buffer": "/d435_pairs",
+ "pose_buffer": "/trk_pose",
+ "cloud_buffer": "/trk_cloud",
+ "model_file": "../../models/test_object.model",
+ "mesh_file": "../../models/test_object.stl",
+ "cameras": {
+  "D435i_1": {"serial": "234322070408", "T_rig_from_camera_mm": [[-1, 0, 0, 17.5], [0, -0.906307787, 0.422618262, -240.664], [0, 0.422618262, 0.906307787, 56.1495], [0, 0, 0, 1]]},
+  "D435i_2": {"serial": "234322070144", "T_rig_from_camera_mm": [[1, 0, 0, -17.5], [0, 0.906307787, -0.422618262, 240.664], [0, 0.422618262, 0.906307787, 56.1495], [0, 0, 0, 1]]},
+  "calibration_file": ""
+ },
+ "work_volume": {"min": [-0.765, -0.290, 0.235], "max": [0.765, 0.290, 0.825], "min_camera_distance": 0.2, "max_camera_distance": 0.8},
+ "background_map": "",
+ "cloud": {
+  "max_points_per_camera": 2500,
+  "max_points_per_camera_search": 45000,
+  "solver_points_track": 350,
+  "solver_points_search": 250,
+  "box_margin_m": 0.015,
+  "lost_box_factor": 2.5,
+  "pixel_margin": 12
+ },
+ "icp": {
+  "distances_m": [0.05, 0.02, 0.01],
+  "kernel": "tukey",
+  "tukey_k_m": 0.005,
+  "tukey_k_ratio": 0.5,
+  "max_iterations": 30,
+  "relative_fitness": 1e-5,
+  "relative_rmse": 1e-5
+ },
+ "fit_check": {
+  "min_points": 150,
+  "max_rmse_m": 0.004,
+  "min_inlier_ratio": 0.6,
+  "min_eigenvalue": 0.01,
+  "max_jump_m": 0.03,
+  "max_jump_rad": 0.35,
+  "max_free_space_violation": 0.15,
+  "visibility_tolerance_m": 0.01,
+  "visibility_points": 600,
+  "min_visibility_checked": 50
+ },
+ "filter": {
+  "accel_noise": 4.0,
+  "min_meas_sigma_m": 0.0003,
+  "orientation_alpha": 0.6,
+  "orientation_beta": 0.1
+ },
+ "states": {
+  "lost_after_rejected": 3,
+  "search_after_rejected": 45,
+  "search_time_limit_ms": 100000.0,
+  "search_orientations": 72,
+  "search_refine_best": 4,
+  "search_coarse_iterations": 10,
+  "search_early_accept": false,
+  "early_accept_min_fitness": 0.95,
+  "early_accept_max_violation": 0.05
+ },
+ "bridge": {"listen_address": "192.168.55.1", "port": 9870, "queue_bytes": 1048576, "status_interval_s": 1.0},
+ "cloud_rate_hz": 30,
+ "cloud_content": "scene",
+ "status_interval_s": 10
+}

@@ -5,15 +5,15 @@
 #   hints     with the inference process trk_flow (flow/live/, C++)
 #   hintspy   with flow/live.py (the Python version of the same process)
 #   nohints   the tracker alone
-#   flow/live_test.sh [STEP=8] [COUNT=0 (all)] [ARMS="hints nohints"]
+#   flow/live_test.sh [STEP=8] [COUNT=0 (all)] [ARMS="hints nohints"] [ENGINES=frozen (a folder of ~/flow_probe)]
 # Needs: tracker/tools/sync_to_jetson.sh, flow/live/build_jetson.sh, the engines in ~/flow_probe/frozen, scenes.bin in
 # ~/flow_probe/frozen/trt_eval.
 # Results: flow/runs/live/{scenes,poses}_<arm>.csv, tracker_<arm>.log, flow_<arm>.log; table: python -m flow.live_eval
 set -e
 cd "$(dirname "$0")/.."
-STEP=${1:-8}; COUNT=${2:-0}; ARMS=${3:-"hints nohints"}
+STEP=${1:-8}; COUNT=${2:-0}; ARMS=${3:-"hints nohints"}; ENGINES=${4:-frozen}
 scp -q flow/live.py flow/trt_run.py jetson:flow_probe/frozen/
-ssh jetson "STEP=$STEP COUNT=$COUNT ARMS='$ARMS' bash -s" <<'REMOTE'
+ssh jetson "STEP=$STEP COUNT=$COUNT ARMS='$ARMS' ENGINES=$ENGINES bash -s" <<'REMOTE'
 D=~/flow_probe/frozen/live; mkdir -p $D
 cd ~/tracker
 for arm in $ARMS; do
@@ -24,8 +24,8 @@ for arm in $ARMS; do
   DUMP=$!
   FLOW=""
   if [ $arm != nohints ]; then
-    if [ $arm = hintspy ]; then ( cd ~/flow_probe/frozen && exec python3 -u live.py --tracker ~/tracker ) > $D/flow_$arm.log 2>&1 &
-    else ~/flow_live/build/trk_flow --config ~/tracker/config/tracker.json --engines ~/flow_probe/frozen > $D/flow_$arm.log 2>&1 &
+    if [ $arm = hintspy ]; then ( cd ~/flow_probe/frozen && exec python3 -u live.py --tracker ~/tracker --engines ~/flow_probe/$ENGINES ) > $D/flow_$arm.log 2>&1 &
+    else ~/flow_live/build/trk_flow --config ~/tracker/config/tracker.json --engines ~/flow_probe/$ENGINES > $D/flow_$arm.log 2>&1 &
     fi
     FLOW=$!
     for i in $(seq 60); do grep -q "hint buffer" $D/flow_$arm.log && break; sleep 1; done

@@ -233,7 +233,7 @@ reasons: DEVIATIONS.md; measurements: TEST_REPORT.md):
 
 | Process | Threads |
 |---|---|
-| trk_tracker | main (signals), loop, status, 2 ring heartbeats |
+| trk_tracker | main (signals), loop, status, 2 ring heartbeats; with `hints.threads` = n > 1 also n - 1 pool threads `trk-hint` (section 14), idle except during a cycle that tries hypotheses |
 | trk_bridge | main (signals, status line), reader (pose buffer futex wait, cloud `latest()`), network (accept, non-blocking send) |
 | viewer.py | main (display loop, ~30 Hz), receiver (socket, CSV), viser server threads |
 
@@ -278,3 +278,34 @@ d435_capture -> /d435_pairs --+--> trk_tracker --> /trk_pose, /trk_cloud
   then the scene for 2 s); `../flow/live_test.sh` runs it with the tracker and the inference process on the Jetson,
   with and without hints (results: `../flow/README.md`).
 
+## 14. Switchable CPU paths (added 2026-11-26)
+
+A profile of the core on the evaluation scenes (`cmake -DTRK_PROFILE=ON`, `src/common/prof.hpp`, printed by
+`trk_hint_eval`) shows where a search step and a hint trial spend their time: the nearest-neighbour queries of the
+ICP take 95 % and 90 %; the normal equations 3 to 4 %, the free-space check 1 to 2 %, the 6x6 solve and the point
+transforms together under 1 %; cloud building and scene filter 0.25 ms per cycle. So the paths below concern the
+correspondence search and the hint trials. Every one is an option; the defaults are the code as it was.
+
+| Option | Values | Effect on the result |
+|---|---|---|
+| `icp.correspondence_search` | `kdtree` (default) | the Open3D port (`SearchHybrid1`) |
+| | `bounded` | the same correspondences: the tree search starts with the bound min(radius, distance to the correspondence of the previous iteration) (`KDTreeFlann::SearchBounded1`) |
+| | `table_exact` | the same correspondences from a grid (`icp/ClosestTable`, cells of `icp.table_cell_m` = 2 mm): per cell the list of all model points that can be the closest for a query in the cell (all within d + 2 h of the centre: d its distance to the model, h the half diagonal); cells with more than 24 use the bounded tree search. 25 MB, built at init |
+| | `table` | per cell the model point closest to the centre; a query takes the best of it and its 8 nearest model points. 3.6 MB. Not always the closest point (98.7 % in the unit test, at most 2.2 mm farther), so poses differ slightly |
+| `hints.threads` | 1 (default) .. 8 | hint trials (`try_hints`) on a fixed pool (`core/work_pool.hpp`): n - 1 threads created at init plus the loop thread; per worker one ICP workspace and one point buffer, allocated at init. The trials are independent; afterwards the hints are gone through in their order with the rule of the sequential code (best score, then RMSE, then the lower index), so the pose record does not depend on thread timing |
+| build: `TRK_TUNE` (default on) | | `-mcpu=cortex-a78ae` on the Jetson (`-mcpu=native` elsewhere); before, the compiler targeted a generic ARMv8-A processor |
+| build: `TRK_LTO` (default off) | | link-time optimization |
+
+Notes:
+- The search cycle stays near the time slice (`states.search_time_limit_ms`, 8 ms) whatever the ICP costs: a faster
+  ICP means more candidates per cycle and fewer cycles until the object is found. One round is up to 4 positions x
+  (72 + 4) ICP runs and is cut off by the 180 cycles of `trk_hint_eval` in many scenes, which is why the classical
+  result of that tool varies by a few scenes with the speed of the machine. The benchmark therefore times a whole
+  round without slicing (`config/bench_noslice.json`).
+- 4 hint threads are meant for the Jetson (6 cores): the loop thread and 3 pool threads work during the trial, 2 cores
+  stay for the capture and the inference process. The cycle that tries the hypotheses is still not time-sliced.
+- Tools: `tools/cpu_bench_run.sh` (one benchmark run), `tools/cpu_bench_table.py` (table and scene-by-scene comparison
+  with a reference run), `tools/bench_cpu_jetson.sh` (all variants on the Jetson in one command, with the thread
+  sanitizer run of the hint tests). Unit tests: `tests/test_cpu_paths.cpp`.
+- Not done, because the profile gives them at most a few percent: SIMD for the cloud builder, the work-volume test,
+  the point transforms and the normal equations; single precision.

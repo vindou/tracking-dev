@@ -37,12 +37,17 @@ of the truth; wrong = accepted and farther; none = nothing accepted. Both column
   60 / 120 (the classical part varies by a few scenes between runs).
 - The minimum score of the verifier (0.85) was chosen on this same set; the figure is not confirmed on fresh scenes.
 
-## Deployed configuration (Jetson Orin Nano, TensorRT 10.3, 25 W mode)
+## Deployed configuration (Jetson Orin Nano, TensorRT 10.3)
 
 Same weights as the table above; what changed is how they are run.
 
-- **Solver.** Euler: 4 steps in the position stage, 8 in the pose stage (13 network evaluations with the object
-  logits, instead of 33). These are the defaults of `propose.py`.
+- **Solver.** Euler: 4 steps in the position stage, 4 in the pose stage (9 network evaluations with the object
+  logits, instead of 33). These are the defaults of `propose.py`. Until 2026-11-27 the pose stage took 8 steps; the
+  tables of this section up to "Current engines" are from that configuration.
+- **Activation.** The engines use the tanh form of GELU (`export.py --act tanh_gelu`), which TensorRT runs about
+  30 % faster; the weights are unchanged.
+- **Verifier and single positions.** The verifier is rearranged like the network (`export.FastVerifier`, same
+  output). For a scene that gives one position, `trk_flow` runs engines for 32 hypotheses instead of 128.
 - **Graph.** The network is rearranged for TensorRT (`export.FastNet`): the part of the 448 -> 256 layer that is the
   same for all points of a hypothesis is computed once per hypothesis, and the per-point layers are 1 x 1
   convolutions on a 16 x 32 grid with pooling layers. Same outputs as the model (below 0.01 degrees in PyTorch).
@@ -65,6 +70,29 @@ engines; preparing the cloud, the seeds and the point sets is not included and w
 |---|---|---|---|
 | float16 | 23 ms | 150 ms | 173 ms |
 | float32 | 34 ms | 228 ms | 261 ms |
+
+**Current engines** (`export.py --deploy`, `jetson_deploy.sh`, folder `~/flow_probe/tanh`; MAXN_SUPER mode, GPU at
+1020 MHz, where the earlier engines take 153 ms instead of 173). The 1,600 scenes through `trk_flow` on the Jetson,
+float16, judged by the tracker; all three runs have the same inputs:
+
+| engines | correct / wrong / none | ms per pair, median (p90) | networks, 4 positions / 1 position |
+|---|---|---|---|
+| GELU, Euler 4 + 8 (`~/flow_probe/frozen`) | 1402 / 43 / 155 | 163 (179) | 159 ms / - |
+| tanh-GELU, Euler 4 + 4 (deployed) | 1401 / 52 / 147 | 88 (104) | 84 ms / 32 ms |
+| ReLU retrain, Euler 4 + 4 (`flow/runs/flow_relu`, not adopted) | 1366 / 47 / 187 | 75 (91) | 72 ms / 29 ms |
+
+Deployed against the earlier engines: correct +30 -31; wrong +17 -8 (p = 0.11, not significant, but worth watching
+on fresh scenes). The ReLU model (same training, `train.py --act relu`) equals the frozen model in PyTorch with 6
+pose steps (1399 / 43 / 158) but loses 36 correct scenes through these engines (p < 0.001); whether the 4 steps or
+float16 cause that was not separated. Engine times: position stage 13.5 ms, pose stage 41.6 (one position 10.7),
+refinement 8.1 (2.6), verifier 15.9 (4.1).
+
+Solver and other runs behind these choices (PyTorch on linbox01, tracker on the Mac, paired against Euler 4 + 6 =
+1396 / 44 / 160): pose stage with Euler x 8, 5, 4, 3: 1395 / 43 / 162, 1396 / 42 / 162, 1395 / 38 / 167, 1392 / 44 /
+164; two-step Adams-Bashforth x 4, 3: 1396 / 44 / 160, 1398 / 42 / 160; unequal step sizes: no difference; dropping
+hypotheses during the solve (racing): 36 to 77 fewer correct; scoring one of each set of agreeing hypotheses: 4 to 11
+fewer correct; INT8: no gain with GELU. A position from the tracker's last pose instead of the position stage (true
+position moved by 10 to 40 mm, 32 hypotheses): 1433 to 1437 correct and 4 to 8 wrong; not built into the live path.
 
 The first export (model as written, 4 Runge-Kutta steps, float16) took about 415 ms. Tried and not adopted: handing
 over one position at a time and stopping at the first the tracker accepts (about 60 ms typical; simulated: 1393 / 46
@@ -181,14 +209,15 @@ python -m flow.verifier --flow flow/runs/flow/model.pt --run flow/runs/verifier 
 .venv/bin/python -m flow.compare flow/data/eval_A flow/data/eval_B    # paired comparison, first folder = reference
 .venv/bin/python -m flow.demo                                         # http://localhost:8090
 # Jetson (ssh jetson): graphs, engines, then the evaluation set through the engines
-.venv/bin/python -m flow.export                                       # flow/runs/export/*.onnx
-flow/jetson_time.sh && flow/jetson_fast.sh start stage1e:stage1 stage2e:stage2    # builds refine, score, stage1e, stage2e (detached; fast.done)
-.venv/bin/python -m flow.trt_eval --tags fp16                         # about 25 min; flow/data/eval_trt_fp16
+.venv/bin/python -m flow.export --deploy --act tanh_gelu --out flow/runs/export_tanh    # the graphs of trk_flow
+flow/jetson_deploy.sh start tanh                                      # ~/flow_probe/tanh: engines and deploy.tsv (detached, 20 min)
+# the earlier engines (Euler 4 + 8, ~/flow_probe/frozen) and the evaluation that prepares the scenes on the Mac:
+#   python -m flow.export; flow/jetson_time.sh; flow/jetson_fast.sh start stage1e:stage1 stage2e:stage2; python -m flow.trt_eval --tags fp16
 # live path: tracker and inference process on the Jetson
 tracker/tools/sync_to_jetson.sh && flow/live/build_jetson.sh          # ~/tracker/build, ~/flow_live/build/trk_flow
-flow/live_test.sh && .venv/bin/python -m flow.live_eval               # 200 scenes with and without hints, about 20 min
+flow/live_test.sh 8 0 "hints nohints" tanh && .venv/bin/python -m flow.live_eval    # 200 scenes with and without hints, about 20 min
 # by hand on the Jetson, next to d435_capture and trk_tracker:
-#   ~/flow_live/build/trk_flow --config ~/tracker/config/tracker.json --engines ~/flow_probe/frozen
+#   ~/flow_live/build/trk_flow --config ~/tracker/config/tracker.json --engines ~/flow_probe/tanh
 ```
 
 The demo and the animations show the stored Runge-Kutta run (`flow/data/eval_demo`) and call the solver explicitly.

@@ -9,10 +9,12 @@ each graph.
   stage2   pts [K2, N, 3], cam [K2, N], q [K2, 4]         -> q, p               the solve
   refine   pts [K2, N, 3], q, p                           -> q, p               verifier.icp (6 steps), float32
   score    pts [K2, N, 3], cam, q, p                      -> logit [K2]         the verifier
-These four are the model as it is written, with 4 Runge-Kutta steps. The deployed graphs are stage1e (4 Euler steps)
-and stage2e (8 Euler steps) with the network rearranged for TensorRT (FastNet; same weights, same outputs), in
-float16; they are written by the same call (stage1f / stage2f: the rearranged network with Runge-Kutta, stage2e1: one
-position). flow/trt_eval.py runs the evaluation set through them on the Jetson.
+These four are the model as it is written, with 4 Runge-Kutta steps. The same call writes stage1e (4 Euler steps)
+and stage2e (8 Euler steps) with the network rearranged for TensorRT (FastNet; same weights, same outputs; stage1f /
+stage2f: the rearranged network with Runge-Kutta, stage2e1: one position); flow/trt_eval.py runs the evaluation set
+through them on the Jetson.
+The deployed graphs are those of --deploy (deploy(): the solver steps of flow.propose, the verifier rearranged, graphs
+for one position), exported with --act tanh_gelu and run in float16 by flow/live/trk_flow.cpp.
 For every scene of --scenes, <out>/s<scene>/ holds the inputs of each graph as raw float32 files and the outputs of
 the PyTorch code (ref_*.bin); flow/jetson_time.sh runs the graphs on them and flow.export --check compares."""
 import argparse
@@ -73,7 +75,7 @@ class FastNet(nn.Module):
     def __init__(self, net, fold=True, layout="conv", pool="reduce", grid=None):
         super().__init__()
         self.fold, self.layout, self.pool, self.grid = fold, layout, pool, grid
-        self.cond, self.head, self.gseg, self.act = net.cond, net.head, net.gseg, nn.GELU()
+        self.cond, self.head, self.gseg, self.act = net.cond, net.head, net.gseg, copy.deepcopy(net.local[1])     # the model's activation
         self.register_buffer("freq", net.freq)
         b = net.local[4].out_features
 
@@ -128,6 +130,122 @@ class FastNet(nn.Module):
         out = self.head(torch.cat([gmax, mean_of(h), c], -1))
         seg = self.seg1(self.act(self.seg0(torch.cat([f, tile(self.gseg(gmax))], cat)))).reshape(B, N)
         return out, seg
+
+
+class FastVerifier(nn.Module):
+    """verifier.Verifier with the same weights and outputs, arranged like FastNet: the per-point layers as 1 x 1
+    convolutions on a grid with pooling layers, and the first layer of each second stage folded (the half of its
+    input that is the maximum over the points is applied once per hypothesis). The nearest-point search between the
+    model points and the cloud stays as it is (differences, not products: products lose the millimetres in float16)."""
+
+    def __init__(self, ver, fold=True, grid_cloud=(16, 32), grid_model=(16, 16)):
+        super().__init__()
+        self.fold, self.gc, self.gm = fold, grid_cloud, grid_model
+        self.register_buffer("model_pts", ver.model_pts)
+        self.head, self.act = ver.head, nn.GELU()
+
+        def conv(lin, cols=None, bias=True):
+            W = lin.weight.data if cols is None else lin.weight.data[:, cols]
+            m = nn.Conv2d(W.shape[1], W.shape[0], 1, bias=bias)
+            m.weight.data = W.clone()[..., None, None]
+            if bias:
+                m.bias.data = lin.bias.data.clone()
+            return m
+
+        def second(seq, b):         # first layer of a second stage: [per-point part, per-hypothesis part]
+            if not fold:
+                return conv(seq[0]), None
+            g = nn.Linear(seq[0].in_features - b, seq[0].out_features)
+            g.weight.data, g.bias.data = seq[0].weight.data[:, b:].clone(), seq[0].bias.data.clone()
+            return conv(seq[0], slice(0, b), bias=False), g
+        self.cloud1 = nn.ModuleList(conv(ver.cloud1[i]) for i in (0, 2, 4))
+        b = ver.cloud1[4].out_features
+        self.cloud2a, self.cloud2g = second(ver.cloud2, b)
+        self.cloud2b = conv(ver.cloud2[2])
+        self.model1 = nn.ModuleList(conv(ver.model1[i]) for i in (0, 2))
+        self.model2a, self.model2g = second(ver.model2, ver.model1[2].out_features)
+
+    def stage(self, x, grid, first, a, g, b):
+        """[B, N, C] features -> maximum and mean over the points of the second stage's output."""
+        B = x.shape[0]
+        H, W = grid
+        pool_max = lambda t: nn.functional.max_pool2d(t, (H, W)).flatten(1)
+        pool_mean = lambda t: nn.functional.avg_pool2d(t, (H, W)).flatten(1)
+        f = x.transpose(1, 2).reshape(B, -1, H, W)
+        for m in first:
+            f = self.act(m(f))
+        fmax = pool_max(f)
+        h = a(f) + g(fmax)[:, :, None, None] if g is not None else a(torch.cat([f, fmax[:, :, None, None].expand(-1, -1, H, W)], 1))
+        h = self.act(h)
+        if b is not None:
+            h = self.act(b(h))
+        return pool_max(h), pool_mean(h)
+
+    def forward(self, table, pts, cam, q, p):
+        xm = (pts - p[:, None]) @ geom.qmat(q)
+        hmax, hmean = self.stage(model.features(table, xm, cam), self.gc, self.cloud1, self.cloud2a, self.cloud2g, self.cloud2b)
+        mp, mn = self.model_pts[None, :, :3], self.model_pts[None, :, 3:]
+        d, j = torch.cdist(mp.expand(len(xm), -1, -1), xm).min(dim=-1)
+        near = torch.gather(xm, 1, j[..., None].expand(-1, -1, 3))
+        v = (near - mp) / model.RES_SCALE
+        dn = d[..., None] / model.RES_SCALE
+        x = torch.cat([mp.expand(len(xm), -1, -1) / model.SET_RADIUS, mn.expand(len(xm), -1, -1), v * torch.tanh(dn) / (dn + 1e-6)], -1)
+        kmax, kmean = self.stage(x, self.gm, self.model1, self.model2a, self.model2g, None)
+        return self.head(torch.cat([hmax, hmean, kmax, kmean], -1)).squeeze(-1)
+
+
+@torch.no_grad()
+def idea_parts(out, ver, table, t):
+    """Graphs for timing the verifier and the refinement on the Jetson (flow/jetson_fast.sh start; they are named
+    evalx_v_* so that its loop over parts/evalx_*.onnx takes them): the verifier as it is and rearranged
+    (FastVerifier), for 128 hypotheses and for the 32 of one position, and the refinement for 32."""
+    out.mkdir(parents=True, exist_ok=True)
+    s = t["score"][0]
+    ref = Score(ver, table)(*s.values())
+    for b in (128, 32):
+        inp = {k: v[:b].contiguous() for k, v in s.items()}
+        for k, v in inp.items():
+            v.numpy().astype(np.float32).tofile(out / f"in_v{b}_{k}.bin")
+        for name, m in ((f"score{b}", Score(ver, table)), (f"scoref{b}", Score(FastVerifier(ver), table)), (f"scorenofold{b}", Score(FastVerifier(ver, fold=False), table))):
+            d = (torch.sigmoid(m(*inp.values())) - torch.sigmoid(ref[:b])).abs().max().item()
+            print(f"{name}: largest difference of the score to the verifier {d:.2e}")
+            assert d < 1e-4
+            (out / f"evalx_v_{name}.inputs").write_text(",".join(f"{k}_in:in_v{b}_{k}.bin" for k in inp))
+            export(m, inp, ["logit"], out / f"evalx_v_{name}.onnx")
+    r = {k: v[:32].contiguous() for k, v in t["refine"][0].items()}
+    for k, v in r.items():
+        v.numpy().astype(np.float32).tofile(out / f"in_vr32_{k}.bin")
+    (out / "evalx_v_refine32.inputs").write_text(",".join(f"{k}_in:in_vr32_{k}.bin" for k in r))
+    export(Refine(table), r, ["q", "p"], out / "evalx_v_refine32.onnx")
+
+
+@torch.no_grad()
+def deploy(out, net, ver, table, t):
+    """The graphs of the inference process (flow/live/trk_flow.cpp), with the solver steps of flow.propose:
+      stage1e          position stage, 32 seeds          stage2e / stage2e1    pose stage, 4 positions / 1 position
+      refine / refine1  refinement, 128 / 32 hypotheses   score / score1        verifier (FastVerifier), 128 / 32
+    Each is compared here with the model as it is written, on the tensors of one scene."""
+    out.mkdir(parents=True, exist_ok=True)
+    fast, fver = FastNet(net, **FAST[DEPLOYED]), FastVerifier(ver)
+    s1, s2, rf, sc = (t[k][0] for k in ("stage1", "stage2", "refine", "score"))
+    one = lambda d: {k: v[:ORIENT].contiguous() for k, v in d.items()}
+    st = lambda n, seg, steps: Stage(n, table, seg, steps, "euler")
+    n1, n2 = propose.STAGE1_STEPS, propose.SOLVER_STEPS
+    graphs = {"stage1e": (st(fast, True, n1), st(net, True, n1), s1, ["q", "p", "seg"]),
+              "stage2e": (st(fast, False, n2), st(net, False, n2), s2, ["q", "p"]),
+              "stage2e1": (st(fast, False, n2), st(net, False, n2), one(s2), ["q", "p"]),
+              "refine": (Refine(table), None, rf, ["q", "p"]), "refine1": (Refine(table), None, one(rf), ["q", "p"]),
+              "score": (Score(fver, table), Score(ver, table), sc, ["logit"]), "score1": (Score(fver, table), Score(ver, table), one(sc), ["logit"])}
+    for name, (m, ref, inp, outs) in graphs.items():
+        if ref is not None:
+            got, want = m(*inp.values()), ref(*inp.values())
+            if outs == ["logit"]:
+                print(f"{name}: largest difference of the score to the verifier {(torch.sigmoid(got) - torch.sigmoid(want)).abs().max().item():.2e}")
+            else:
+                er, ep = pose_diff(got[0], got[1], want[0], want[1])
+                print(f"{name}: rearranged against the model, max {er.max():.4f} deg {ep.max():.4f} mm")
+        export(m, inp, outs, out / f"{name}.onnx")
+    (out / "deploy.json").write_text(json.dumps({"stage1_steps": n1, "pose_steps": n2, "activation": type(net.local[1]).__name__ + ("(tanh)" if getattr(net.local[1], "approximate", "none") == "tanh" else "")}))
 
 
 FAST = {"lin": dict(fold=False, layout="lin"), "linfold": dict(fold=True, layout="lin"),
@@ -340,6 +458,10 @@ def main():
     ap.add_argument("--parts", action="store_true", help="export the graphs of the timing split and the mixed-precision solve instead")
     ap.add_argument("--fast", action="store_true", help="export one evaluation with every arrangement of FastNet instead")
     ap.add_argument("--fast-stages", default="", help="export whole stages with this arrangement of FastNet (a key of FAST) instead")
+    ap.add_argument("--ideas", action="store_true", help="export the verifier rearranged and the one-position graphs for timing instead")
+    ap.add_argument("--deploy", action="store_true", help="export the graphs of the inference process (deploy()) instead; see flow/jetson_deploy.sh")
+    ap.add_argument("--model", default=propose.MODEL)
+    ap.add_argument("--act", default="", choices=["", "tanh_gelu"], help="replace the activation of the flow network (model.set_activation)")
     ap.add_argument("--check", default="", help="comma-separated tags of trtexec runs to compare (no export)")
     a = ap.parse_args()
     out = propose.ROOT / a.out
@@ -347,7 +469,9 @@ def main():
         return check(out, a.check.split(","))
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cpu")
-    net, ver, table = propose.load(dev)
+    net, ver, table = propose.load(dev, a.model)
+    if a.act:
+        model.set_activation(net, a.act)
     rig = scene.Rig()
     want = [int(s) for s in a.scenes.split(",")]
     first, kept = None, []
@@ -357,7 +481,7 @@ def main():
         t = scene_tensors(net, ver, table, rig, depth, i)
         first = first or t
         kept.append((i, t))
-        if a.parts or a.fast:
+        if a.parts or a.fast or a.ideas or a.deploy:
             break
         sd = out / f"s{i}"
         sd.mkdir(exist_ok=True)
@@ -371,6 +495,10 @@ def main():
         qx, px = V.icp(table, r_in["pts"], r_in["q"], r_in["p"], export=True)
         er, ep = pose_diff(qx, px, r_ref["q"], r_ref["p"])
         print(f"scene {i} ({cat}): float32 refinement against float64: max {er.max():.4f} deg, {ep.max():.4f} mm", flush=True)
+    if a.deploy:
+        return deploy(out, net, ver, table, first)
+    if a.ideas:
+        return idea_parts(out / "parts", ver, table, first)
     if a.fast_stages:
         return fast_stages(out, net, table, kept, FAST[a.fast_stages])
     if a.fast:

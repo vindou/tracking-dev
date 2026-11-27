@@ -116,13 +116,26 @@ class PointLinear(nn.Linear):
         return super().forward(x)
 
 
-def mlp(dims, last_act=True, norm=True):
+ACTIVATIONS = {"gelu": nn.GELU, "tanh_gelu": lambda: nn.GELU(approximate="tanh"), "relu": nn.ReLU}
+
+
+def mlp(dims, last_act=True, norm=True, act="gelu"):
     layers = []
     for i in range(len(dims) - 1):
         layers.append(PointLinear(dims[i], dims[i + 1]))
         if i < len(dims) - 2 or last_act:
-            layers += ([nn.LayerNorm(dims[i + 1])] if norm else []) + [nn.GELU()]
+            layers += ([nn.LayerNorm(dims[i + 1])] if norm else []) + [ACTIVATIONS[act]()]
     return nn.Sequential(*layers)
+
+
+def set_activation(net, act):
+    """Replaces every activation of a network (in place): e.g. the tanh form of GELU, which TensorRT runs faster, in
+    a network trained with GELU."""
+    for m in net.modules():
+        for name, child in list(m.named_children()):
+            if isinstance(child, (nn.GELU, nn.ReLU)):
+                setattr(m, name, ACTIVATIONS[act]())
+    return net
 
 
 class FlowNet(nn.Module):
@@ -131,15 +144,15 @@ class FlowNet(nn.Module):
     points. Outputs f [B, 6] and a per-point logit "this point is on the object" [B, N] (used to rank the positions
     of the first inference stage). The per-point layers have no normalization. The last layer starts at zero."""
 
-    def __init__(self, w=1):
+    def __init__(self, w=1, act="gelu"):
         super().__init__()
         b, g = 192 * w, 512 * w
-        self.local = mlp([N_FEAT, 64 * w, 128 * w, b], norm=False)
-        self.cond = mlp([32 + 3, 64, 64])
-        self.mid = mlp([2 * b + 64, 256 * w, g], norm=False)
-        self.head = nn.Sequential(mlp([2 * g + 64, 512, 512]), nn.Linear(512, DIM))
-        self.gseg = mlp([g, 64])
-        self.seg = nn.Sequential(mlp([b + 64, 128], norm=False), nn.Linear(128, 1))
+        self.local = mlp([N_FEAT, 64 * w, 128 * w, b], norm=False, act=act)
+        self.cond = mlp([32 + 3, 64, 64], act=act)
+        self.mid = mlp([2 * b + 64, 256 * w, g], norm=False, act=act)
+        self.head = nn.Sequential(mlp([2 * g + 64, 512, 512], act=act), nn.Linear(512, DIM))
+        self.gseg = mlp([g, 64], act=act)
+        self.seg = nn.Sequential(mlp([b + 64, 128], norm=False, act=act), nn.Linear(128, 1))
         self.register_buffer("freq", torch.exp(torch.linspace(0, math.log(16.0), 16)))    # slow in t: the solver takes few steps
         nn.init.zeros_(self.head[-1].weight)
         nn.init.zeros_(self.head[-1].bias)
@@ -163,7 +176,7 @@ def load(path, dev):
     cfg = ck.get("config", {})
     assert cfg.get("encoder", "pointnet") == "pointnet" and not cfg.get("gate") and not cfg.get("smooth"), \
         "checkpoint of an experimental variant that is no longer in the code"
-    net = FlowNet(ck.get("width", 1)).to(dev)
+    net = FlowNet(ck.get("width", 1), cfg.get("act", "gelu")).to(dev)
     net.load_state_dict(ck["model"])
     return net.eval()
 
@@ -208,21 +221,34 @@ def _step(net, table, pts, cam, q, p, t, h, solver):
     return q2 / q2.norm(dim=-1, keepdim=True), p + dv
 
 
-def integrate(net, table, pts, cam, q, p, t0, t1, steps, trajectory=False, solver="rk4"):
-    """Fixed steps from t0 to t1 (solver: "rk4", 4 network evaluations per step, or "euler", 1). Returns q, p and,
-    with trajectory = True, the list of states."""
-    h = (t1 - t0) / steps
+def integrate(net, table, pts, cam, q, p, t0, t1, steps, trajectory=False, solver="rk4", power=1.0):
+    """Fixed steps from t0 to t1 (solver: "rk4", 4 network evaluations per step; "euler", 1; "ab2", 1: the
+    two-step Adams-Bashforth method, which extrapolates with the velocity of the previous step, 1.5 f_n - 0.5 f_(n-1);
+    its first step is an Euler step). power: the step sizes; 1: equal steps; p > 1: the times are
+    t1 + (t0 - t1) (1 - i / steps)^p, larger steps at the start and smaller ones towards t1 (not for "ab2").
+    Returns q, p and, with trajectory = True, the list of states."""
+    assert power == 1.0 or solver != "ab2", "the two-step method here is for equal steps"
+    times = [t1 + (t0 - t1) * (1 - i / steps) ** power for i in range(steps + 1)]
     traj = [(q, p)]
+    prev = None
     for i in range(steps):
-        q, p = _step(net, table, pts, cam, q, p, t0 + i * h, h, solver)
+        h = times[i + 1] - times[i]
+        if solver == "ab2":
+            f = field(net, table, pts, cam, q, p, times[i])[0]
+            k = (f[:, :3], (geom.qmat(q) @ f[:, 3:, None]).squeeze(-1) * POS_SCALE)     # body-frame angular, rig-frame linear velocity
+            w, v = k if prev is None else (1.5 * k[0] - 0.5 * prev[0], 1.5 * k[1] - 0.5 * prev[1])
+            q = geom.qmul(q, qexp(h * w))
+            q, p, prev = q / q.norm(dim=-1, keepdim=True), p + h * v, k
+        else:
+            q, p = _step(net, table, pts, cam, q, p, times[i], h, solver)
         traj.append((q, p))
     return (q, p, traj) if trajectory else (q, p)
 
 
 @torch.no_grad()
-def generate(net, table, pts, cam, q, p, steps, trajectory=False, solver="rk4"):
+def generate(net, table, pts, cam, q, p, steps, trajectory=False, solver="rk4", power=1.0):
     """Integrates starts (q, p) from T_END to the data end (t = 0)."""
-    return integrate(net, table, pts, cam, q, p, T_END, 0.0, steps, trajectory, solver)
+    return integrate(net, table, pts, cam, q, p, T_END, 0.0, steps, trajectory, solver, power)
 
 
 # ---------------- training pairs ----------------
