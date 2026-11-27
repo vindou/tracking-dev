@@ -4,6 +4,11 @@ Nothing was installed or removed as a system package, and no firmware or kernel 
 system setting was changed on the Jetson, with `sudo`, at the user's request (2026-11-26): the power mode, from 25W
 (GPU up to 918 MHz) to MAXN_SUPER (`sudo nvpmodel -m 2`, GPU up to 1020 MHz; no reboot was needed; the mode persists
 across reboots; back with `sudo nvpmodel -m 1`). All timings recorded before that were taken in the 25W mode.
+A second setting was changed with `sudo` at the user's request (2026-11-27): the lowest GPU clock, from 306 MHz to
+1020 MHz (`echo 1020000000 | sudo tee /sys/class/devfreq/17000000.gpu/min_freq`), so that the clock does not drop
+while the inference process waits (flow/jetson_contention.sh: a proposal after 0.7 s of idle took 148 ms of network
+time, 96 ms with the floor). Idle board power rose from 3.1 W to 4.4 W. The setting is lost at a reboot (nothing was
+installed to restore it); back with `echo 306000000 | sudo tee /sys/class/devfreq/17000000.gpu/min_freq`.
 Everything else below is in the user's home directory or the repository.
 
 ## Jetson (`ssh jetson`, home `/home/gchang`)
@@ -21,6 +26,8 @@ Everything else below is in the user's home directory or the repository.
 | `~/flow_live/` (2026-11-26) | copy of `flow/live/` and its build (`build/trk_flow`, with its own build of the tracker libraries); links TensorRT and CUDA of JetPack, nothing installed | 5 MB | `rm -rf ~/flow_live` |
 | `~/flow_probe/frozen/` (2026-11-25) | ONNX graphs of the frozen flow and verifier (`flow/export.py`), the TensorRT engines built from them (float32 and float16), inputs and outputs of three evaluation scenes, `trtexec` logs (`flow/jetson_time.sh`). Engines of the timing experiments (`flow/jetson_tune.sh`: parts of one evaluation, builder levels 3 to 5, mixed precision) are in the same folder. Graphs and engines of the rearranged network (2026-11-26, `flow/jetson_fast.sh`: `parts/evalx_*`, `stage1f`, `stage2f`, `stage1e`, `stage2e`, `stage2e1`) are there too. `trt_run.py` and `trt_eval/` (2026-11-26, `flow/trt_eval.py`: inputs and outputs of the 1,600 evaluation scenes, 0.5 GB) are there too. Only `trtexec` and `python3 trt_run.py` (the `tensorrt` module and `libcudart` of JetPack) were run; nothing installed. Added for the live path: `live.py`, `trt_eval/scenes.bin` (the 1,600 evaluation scenes, 2.6 GB), the hint files of the offline checks, and `live/` (logs and pose files of the live test) | 7.8 GB | `rm -rf ~/flow_probe/frozen` |
 | `~/flow_probe/tanh/`, `~/flow_probe/relu/` (2026-11-27) | graphs and float16 engines of the inference process (`flow/jetson_deploy.sh`): the frozen weights with tanh-GELU (deployed) and the ReLU retrain (not adopted), each 7 engines, `deploy.tsv` and the hints of the 1,600 scenes; `~/flow_live/build/trk_flow` rebuilt | 0.8 GB each | `rm -rf ~/flow_probe/tanh ~/flow_probe/relu` |
+| `~/flow_probe/contention/` (2026-11-27) | per-scene timings, clock readings and `tegrastats` power logs of the idle-clock experiment (`flow/jetson_contention.sh`); float32 engines of the ReLU model in `~/flow_probe/relu/` | 0.4 GB with the engines | `rm -rf ~/flow_probe/contention ~/flow_probe/relu/*.fp32.engine` |
+| `~/flow_probe/tanh2/` (2026-11-27) | the deployed engines: tanh-GELU, Euler 4 + 2 (two pose-stage engines built there, the other five copied from `~/flow_probe/tanh`), and the hints of the 1,600 scenes | 0.7 GB with the graphs | `rm -rf ~/flow_probe/tanh2` |
 
 Unchanged: `~/capture/` (capture program from the earlier task; only its existing build is run).
 
@@ -49,6 +56,12 @@ Not yet updated to the cleaned code of 2026-11-25: `~/tracking-flow/flow/` still
 
 Updated on 2026-11-26: `flow/{__init__,model,geom,propose,scene,make_data,verifier,train}.py` copied again (the cleaned code; the other old modules are still there), and `flow/runs/flow/model.pt` and `flow/data/table.npy` made as copies under the new names. (A field computation for portfolio figures ran there with a 2 GB memory limit; its script and output were removed again.)
 
+Added on 2026-11-26 and 27 (speed runs), inside `~/tracking-flow/`: `queue_speed.sh` and `queue2_speed.sh` to
+`queue6_speed.sh` with their `.out` and `.log` files (one job at a time, GPU memory capped at 4 to 4.5 GB), the
+proposal folders `flow/data/eval_lb_*` (38, one per solver, activation or idea run), and the run `flow/runs/flow_relu`
+(the one training of these two days: the frozen recipe with ReLU, 30,000 steps); `flow/*.py` copied again. No
+package was installed.
+
 Nothing outside `~/tracking-flow/` was changed. The GPU is shared: two early runs at batch 128 ran out of memory
 while another user's job was on it.
 
@@ -75,6 +88,7 @@ while another user's job was on it.
 | `flow/runs/trt_eval/`, `flow/data/eval_trt_fp32`, `flow/data/eval_trt_fp16`, `flow/data/eval_euler8*` (2026-11-26) | inputs and outputs exchanged with the Jetson for the evaluation through TensorRT (568 MB), its result folders, and the result folders of the solver and simulation runs | ignored |
 | `flow/runs/live/`, `flow/data/eval_live_np`, `flow/data/eval_live_cpp` (2026-11-26) | logs and pose files of the live test fetched from the Jetson (53 MB), result folders of the offline checks of the inference process | ignored |
 | `flow/runs/export_tanh/`, `flow/runs/export_relu/`, `flow/runs/flow_relu/`, `flow/data/eval_lb_*`, `flow/data/eval_jet_*`, `flow/runs/cpuopt/`, `tracker/build-opt*`, `tracker/build-ref`, `tracker/build-prof` (2026-11-26 and 27) | graphs of the inference process (0.7 GB), the ReLU model copied back from linbox01, result folders of the solver, activation and idea runs (proposals from linbox01, links plus hint files) and of the runs through the Jetson engines, results and separate builds of the tracker CPU work | ignored |
+| `flow/runs/export_tanh2/`, `flow/runs/contention/`, `flow/runs/live_{frozen,tanh_nofloor,tanh_floor,tanh2_floor}/` (2026-11-27) | graphs of the deployed engines (Euler 4 + 2), results of the idle-clock experiment, copies of the live-test results per engine set | ignored |
 | `.gitignore` | entries for `.venv/`, `third_party_src/`, `viewer/poses.csv`, `viewer/demo_logs/` | yes |
 
 Note: `.gitignore` also ignores `*.log` and `*.out`, so most files in `tracker/logs/` would not be committed as they

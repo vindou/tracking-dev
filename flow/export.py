@@ -220,7 +220,7 @@ def idea_parts(out, ver, table, t):
 
 
 @torch.no_grad()
-def deploy(out, net, ver, table, t):
+def deploy(out, net, ver, table, t, pose_steps=None):
     """The graphs of the inference process (flow/live/trk_flow.cpp), with the solver steps of flow.propose:
       stage1e          position stage, 32 seeds          stage2e / stage2e1    pose stage, 4 positions / 1 position
       refine / refine1  refinement, 128 / 32 hypotheses   score / score1        verifier (FastVerifier), 128 / 32
@@ -230,7 +230,7 @@ def deploy(out, net, ver, table, t):
     s1, s2, rf, sc = (t[k][0] for k in ("stage1", "stage2", "refine", "score"))
     one = lambda d: {k: v[:ORIENT].contiguous() for k, v in d.items()}
     st = lambda n, seg, steps: Stage(n, table, seg, steps, "euler")
-    n1, n2 = propose.STAGE1_STEPS, propose.SOLVER_STEPS
+    n1, n2 = propose.STAGE1_STEPS, pose_steps or propose.SOLVER_STEPS
     graphs = {"stage1e": (st(fast, True, n1), st(net, True, n1), s1, ["q", "p", "seg"]),
               "stage2e": (st(fast, False, n2), st(net, False, n2), s2, ["q", "p"]),
               "stage2e1": (st(fast, False, n2), st(net, False, n2), one(s2), ["q", "p"]),
@@ -460,6 +460,7 @@ def main():
     ap.add_argument("--fast-stages", default="", help="export whole stages with this arrangement of FastNet (a key of FAST) instead")
     ap.add_argument("--ideas", action="store_true", help="export the verifier rearranged and the one-position graphs for timing instead")
     ap.add_argument("--deploy", action="store_true", help="export the graphs of the inference process (deploy()) instead; see flow/jetson_deploy.sh")
+    ap.add_argument("--pose-steps", type=int, default=0, help="--deploy: Euler steps of the pose stage (0: the default of flow.propose)")
     ap.add_argument("--model", default=propose.MODEL)
     ap.add_argument("--act", default="", choices=["", "tanh_gelu"], help="replace the activation of the flow network (model.set_activation)")
     ap.add_argument("--check", default="", help="comma-separated tags of trtexec runs to compare (no export)")
@@ -496,7 +497,7 @@ def main():
         er, ep = pose_diff(qx, px, r_ref["q"], r_ref["p"])
         print(f"scene {i} ({cat}): float32 refinement against float64: max {er.max():.4f} deg, {ep.max():.4f} mm", flush=True)
     if a.deploy:
-        return deploy(out, net, ver, table, first)
+        return deploy(out, net, ver, table, first, a.pose_steps)
     if a.ideas:
         return idea_parts(out / "parts", ver, table, first)
     if a.fast_stages:
