@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../common/prof.hpp"
+
 namespace open3d {
 namespace pipelines {
 namespace registration {
@@ -20,6 +22,7 @@ namespace {
 
 // PointCloud::Transform for the points only (same arithmetic).
 inline void TransformPoints(const Eigen::Matrix4d &transformation, std::vector<Eigen::Vector3d> &points) {
+    TRK_PROF(kTransform);
     for (auto &point : points) {
         Eigen::Vector4d new_point = transformation * Eigen::Vector4d(point(0), point(1), point(2), 1.0);
         point = new_point.head<3>() / new_point(3);
@@ -33,9 +36,44 @@ inline void GetResultAndCorrespondences(const std::vector<Eigen::Vector3d> &pcd,
                                         ICPWorkspace &ws,
                                         double &fitness,
                                         double &inlier_rmse) {
+    TRK_PROF(kCorres);
     ws.corres.clear();
     ws.inlier.assign(pcd.size(), 0);
     double error2 = 0.0;
+    if (ws.search == ICPWorkspace::kBounded) {
+        for (std::size_t i = 0; i < pcd.size(); ++i) {
+            int index = 0;
+            double dist2 = 0.0;
+            if (target_kdtree.SearchBounded1(pcd[i], max_correspondence_distance, ws.prev[i], index, dist2) > 0) {
+                error2 += dist2;
+                ws.corres.emplace_back(int(i), index);
+                ws.inlier[i] = 1;
+                ws.prev[i] = index;
+            } else {
+                ws.prev[i] = -1;
+            }
+        }
+    } else if (ws.search == ICPWorkspace::kTableExact && ws.table) {
+        for (std::size_t i = 0; i < pcd.size(); ++i) {
+            int index = 0;
+            double dist2 = 0.0;
+            if (ws.table->SearchExact1(target_kdtree, pcd[i], max_correspondence_distance, index, dist2) > 0) {
+                error2 += dist2;
+                ws.corres.emplace_back(int(i), index);
+                ws.inlier[i] = 1;
+            }
+        }
+    } else if (ws.search == ICPWorkspace::kTable && ws.table) {
+        for (std::size_t i = 0; i < pcd.size(); ++i) {
+            int index = 0;
+            double dist2 = 0.0;
+            if (ws.table->Search1(pcd[i], max_correspondence_distance, index, dist2) > 0) {
+                error2 += dist2;
+                ws.corres.emplace_back(int(i), index);
+                ws.inlier[i] = 1;
+            }
+        }
+    } else {
     for (std::size_t i = 0; i < pcd.size(); ++i) {
         int index = 0;
         double dist2 = 0.0;
@@ -44,6 +82,7 @@ inline void GetResultAndCorrespondences(const std::vector<Eigen::Vector3d> &pcd,
             ws.corres.emplace_back(int(i), index);
             ws.inlier[i] = 1;
         }
+    }
     }
     if (ws.corres.empty()) {
         fitness = 0.0;
@@ -67,6 +106,8 @@ inline Eigen::Matrix4d ComputeTransformationPointToPlane(const std::vector<Eigen
     Eigen::Vector6d J_r = Eigen::Vector6d::Zero();
     double r = 0.0, w = 0.0, wsum = 0.0;
     Eigen::Vector3d csum = Eigen::Vector3d::Zero();
+    {
+    TRK_PROF(kAccumulate);
     for (int i = 0; i < (int)corres.size(); ++i) {
         const Eigen::Vector3d &vs = source[corres[i][0]];
         const Eigen::Vector3d &vt = target.points_[corres[i][1]];
@@ -80,6 +121,8 @@ inline Eigen::Matrix4d ComputeTransformationPointToPlane(const std::vector<Eigen
         wsum += w;
         csum += vs;
     }
+    }
+    TRK_PROF(kSolve);
     out.JTJ = JTJ;
     out.JTr = JTr;
     out.weight_sum = wsum;
@@ -122,6 +165,7 @@ RegistrationResultPrealloc RegistrationICPPrealloc(const Eigen::Vector3d *source
     RegistrationResultPrealloc result;
     result.transformation = init;
     ws.pcd.assign(source, source + n);
+    if (ws.search == ICPWorkspace::kBounded) ws.prev.assign(n, -1);
     if (!init.isIdentity()) {
         TransformPoints(init, ws.pcd);
     }

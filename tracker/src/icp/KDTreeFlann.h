@@ -44,6 +44,13 @@ public:
     /// Allocation-free form for max_nn = 1 (tracker optimization; same result as SearchHybrid(query, radius, 1)).
     int SearchHybrid1(const Eigen::Vector3d &query, double radius, int &index, double &distance2) const;
 
+    /// Tracker optimization: SearchHybrid1 with the search bounded from the start by the radius and, if seed >= 0, by
+    /// the distance to the point seed (the correspondence of the previous iteration). The closest point is still
+    /// found exactly (the seed is a candidate, and nothing farther than the bound could be returned); only the parts
+    /// of the tree that cannot hold a closer point are skipped. Same result as SearchHybrid1, except that of two
+    /// points at exactly the same distance the seed is kept.
+    int SearchBounded1(const Eigen::Vector3d &query, double radius, int seed, int &index, double &distance2) const;
+
 protected:
     bool SetRawData(const Eigen::Map<const Eigen::MatrixXd> &data);
 

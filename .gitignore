@@ -82,3 +82,9 @@ __pycache__/
 # flow module: generated data, training runs
 flow/data/
 flow/runs/
+
+# flow animations: rendered videos
+flow/anim/media/
+
+# over GitHub's 100 MB limit
+tracker/logs/long_30min/viewer_poses.csv

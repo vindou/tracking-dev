@@ -54,6 +54,8 @@ python3 -m venv .venv && .venv/bin/pip install viser numpy trimesh cascadio open
 | `trk_camid` (T4) | Jetson | camera identification (cover the -Y camera) -> serials in the configuration |
 | `trk_calib` (T5) | Jetson | single-camera solves, camera-frame check, calibration file |
 | `trk_bgmap` (T6) | Jetson | background map of the empty scene (20 mm grid) |
+| `trk_scenes` | Jetson | test source: scenes of a scenes file in the pair buffer, one after another (live test of the hint path, `../flow/live_test.sh`) |
+| `libtrk_flowio` | both | shared library, C interface of the tracker side for the inference process `../flow/live/trk_flow` (`src/flowio/flowio.h`) |
 | `trk_hint_eval` | both | acquisition on independent static scenes, classical search with and without pose hypotheses of the flow module (`../flow`) |
 | `trk_offline` | both | tracker core on a pair file -> pose CSV (offline reference, analysis) |
 | `trk_posedump` | Jetson | pose buffer -> CSV |
@@ -105,6 +107,9 @@ the rig frame, from `trk_workvolume`: region both cameras see, 0.2-0.8 m from th
 k = max(5 mm, 0.5 x distance), iterations, convergence); `fit_check` (limits); `filter` (Kalman and orientation filter
 gains); `states` (lost and search thresholds, search time limit 8 ms per cycle, orientations); `bridge` (address
 192.168.55.1, port 9870, queue bytes); `cloud_rate_hz` (30; the task's value is 15, see DEVIATIONS 36); `status_interval_s` (10).
+Optional, with the defaults that keep the behaviour as it was: `hints` (`buffer` "/trk_hints", `max_age_ms` 400,
+`threads` 1); `icp.correspondence_search` ("kdtree"; "bounded", "table_exact", "table": DESIGN.md section 14),
+`icp.table_cell_m` (0.002). `config/bench_noslice.json` is the same file with the search time limit removed (benchmarks).
 
 ## Shared-memory rings (pose and cloud buffers)
 
@@ -192,7 +197,15 @@ Record n is in slot `n % slot_count`.
 | 608 | u64 | pairs skipped (total) |
 | 616 | u32 | rejected cycles in a row |
 | 620 | f32 | free-space violation fraction |
-| 624 | | reserved to 640 |
+| 624 | u8 | external pose hypotheses tried in this cycle (DESIGN.md 13) |
+| 625 | u8 | 1: the pose accepted in this cycle started from an external hypothesis |
+| 626 | | reserved to 640 |
+
+### Hint record (version 1, 2176 bytes; ring `/trk_hints`, 4 slots, written by `../flow/live/trk_flow`)
+
+`u32 version` 0, `u32 count` 4, `u64 hint_seq` 8, `u64 pair_seq` 16, `u64 capture_instance_id` 24,
+`i64 meas_time_mono_ns` 32, `i64 publish_time_mono_ns` 40, `f32 prep_ms` 48, `f32 net_ms` 52, `f32 post_ms` 56,
+`u32 hypotheses` 60, `f32 score[16]` 64, `f64 T_rig_from_object[16][16]` 128 (row-major 4x4, best first).
 
 ### Cloud record (version 1, 131136 bytes; 15 Hz)
 

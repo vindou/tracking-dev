@@ -42,6 +42,17 @@ struct TrackerConfig {
     bool search_early_accept = false;
     double early_min_fitness = 0.95, early_max_violation = 0.05;
     double cloud_rate_hz = 30, status_interval_s = 10;
+    // external pose hypotheses (DESIGN.md 13): read from this ring while in search state; empty name = off
+    std::string hint_buffer = "/trk_hints";
+    double hint_max_age_ms = 400;      // hypotheses computed from a pair older than this are not used
+    // Hint trials in parallel: number of ICP runs at a time, the loop thread included (1: one after another, no pool).
+    // The result does not depend on it (DESIGN.md 13).
+    int hint_threads = 1;
+    // Correspondence search of the ICP (RegistrationPrealloc.h, ClosestTable.h): "kdtree" (the port), "bounded" (same
+    // correspondences, bounded search), "table_exact" (same correspondences, from a table with cells of table_cell m),
+    // "table" (the short form of the table; correspondences may differ slightly).
+    std::string corr_search = "kdtree";
+    double table_cell = 0.002;
     bool cloud_scene = true;   // cloud buffer: the filtered cloud (true) or only the solver's points (false)
     // telemetry bridge
     std::string bridge_address = "192.168.55.1";

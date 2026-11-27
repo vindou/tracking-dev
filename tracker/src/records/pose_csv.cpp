@@ -16,7 +16,7 @@ void write_pose_csv_row(FILE* f, const PoseRecord& p, const double* t) {
     std::fprintf(f, ",%.7f,%.5f,%.6f,%u,%u,%.4f", p.fit_rmse, p.inlier_ratio, p.min_eigenvalue, p.point_count,
                  p.icp_iterations, double(p.free_space_violation));
     for (uint32_t s = 0; s < kStageCount; s++) std::fprintf(f, ",%.1f", double(p.stage_us[s]));
-    std::fprintf(f, ",%" PRIu64, p.pairs_skipped);
+    std::fprintf(f, ",%" PRIu64 ",%u,%u", p.pairs_skipped, unsigned(p.hints_tried), unsigned(p.by_hint));
     if (t) {
         Eigen::Matrix3d R;
         for (int i = 0; i < 9; i++) R(i / 3, i % 3) = t[(i / 3) * 4 + i % 3];

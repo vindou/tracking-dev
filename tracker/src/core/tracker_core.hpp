@@ -17,6 +17,7 @@
 #include "filters.hpp"
 #include "mesh.hpp"
 #include "shm_layout.hpp"
+#include "work_pool.hpp"
 
 namespace trk {
 
@@ -76,6 +77,11 @@ private:
                   bool check_jump);
     bool search_step(int64_t t_start, PoseRecord& pose);
     bool try_hints(PoseRecord& pose);
+    bool try_hints_parallel(PoseRecord& pose);
+    void hint_job(int i, int worker);
+    int select_near_into(const Vec3& c, double radius, int max_points, Eigen::Vector3d* out) const;
+    void evaluate_into(const open3d::pipelines::registration::RegistrationResultPrealloc& r, const Mat4* pred, PoseRecord& pose,
+                       bool check_jump, int ns, Mat4& T_out) const;
     void fill_cloud(CloudRecord& cloud, const PoseRecord& pose);
     // Free-space check: fraction of the model points facing a camera whose pixel shows a surface farther away than
     // the model surface (the camera sees through the object). checked = points with a usable measurement.
@@ -137,6 +143,24 @@ private:
     Mat4 hints_[kMaxHints];
     int n_hints_ = 0, hints_tried_ = 0;
     bool hints_in_order_ = false;
+    // hint trials in parallel (cfg.hint_threads > 1); all memory allocated in init()
+    struct HintWorker {
+        open3d::pipelines::registration::ICPWorkspace ws;
+        std::vector<Eigen::Vector3d> pts;
+    };
+    struct HintResult {
+        open3d::pipelines::registration::RegistrationResultPrealloc r;
+        Mat4 T = Mat4::Identity();
+        Vec3 c = Vec3::Zero();
+        double score = -1;
+        int ns = 0;
+        bool ran = false, valid = false;
+    };
+    std::vector<HintWorker> hw_;
+    HintResult hres_[kMaxHints];
+    std::vector<uint8_t> hint_inlier_[kMaxHints];
+    open3d::geometry::ClosestTable table_;
+    WorkPool pool_;   // last member: its threads stop before the rest is destroyed
 };
 
 }  // namespace trk

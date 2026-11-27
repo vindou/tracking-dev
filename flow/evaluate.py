@@ -1,13 +1,14 @@
-"""Flow hypotheses against the classical search on the evaluation scenes, both through the tracker core.
+"""Learned proposals against the classical search on the evaluation scenes, both through the tracker core.
 
-    python -m flow.evaluate [--model flow/runs/a/model.pt] [--eval flow/data/eval] [--k 32] [--centers 4] [--orient 32] [--hints 16]
+    python -m flow.evaluate [--eval flow/data/eval] [--propose-args "--device mps"]
 
-1. flow.infer writes the hypotheses of every scene (hints.bin).
+1. flow.propose writes the hypotheses of every scene (hints.bin).
 2. tracker/build-mac/trk_hint_eval runs the tracker core on every scene: classical search alone (baseline.csv, made
    once) and with the hypotheses (hints.csv). Same ICP, same fit check.
 3. A pose is counted correct if the tracker accepted it and it is within 10 mm and 10 degrees of the truth, wrong if
-   accepted and farther, none if nothing was accepted in 180 cycles (2 s of pairs).
-Writes <eval>/results.json and prints the table."""
+   accepted and farther, none if nothing was accepted (from a hypothesis: in the first cycle; classical: in 180
+   cycles, 2 s of pairs).
+Writes <eval>/results.json and prints the table. flow.compare gives the paired comparison of two result folders."""
 import argparse
 import csv
 import json
@@ -76,16 +77,8 @@ def summarize(ev):
     return table
 
 
-def markdown(table, compact=False):
-    """Table of the results; compact = the narrow form for the demo panel (correct / wrong / none per method)."""
-    t = lambda v: "-" if v is None else f"{v:.0f} ms"
-    if compact:
-        L = ["| scenes | classical | flow + ICP |", "|---|---|---|"]
-        for cat, r in table.items():
-            L.append(f"| {cat} ({r['n']}) | {r['classical_correct']} / {r['classical_wrong']} / {r['classical_none']} | "
-                     f"**{r['flow_correct']}** / {r['flow_wrong']} / {r['flow_none']} |")
-        return "\n".join(L)
-    L = ["| scenes | n | classical: correct / wrong / none | flow + ICP: correct / wrong / none | flow, then classical | classical: pairs until the pose (p50) |",
+def markdown(table):
+    L = ["| scenes | n | classical: correct / wrong / none | learned + ICP: correct / wrong / none | learned, then classical | classical: pairs until the pose (p50) |",
          "|---|---|---|---|---|---|"]
     for cat, r in table.items():
         L.append(f"| {cat} | {r['n']} | {r['classical_correct']} / {r['classical_wrong']} / {r['classical_none']} | "
@@ -97,23 +90,14 @@ def markdown(table, compact=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="flow/runs/a/model.pt")
     ap.add_argument("--eval", default="flow/data/eval")
-    ap.add_argument("--k", type=int, default=32)
-    ap.add_argument("--hints", type=int, default=16)
-    ap.add_argument("--centers", type=int, default=4)
-    ap.add_argument("--orient", type=int, default=32)
-    ap.add_argument("--device", default="")
-    ap.add_argument("--method", default="fm", choices=("fm", "rnode"), help="flow matching model (flow.infer) or RNODE model")
-    ap.add_argument("--solver-steps", type=int, default=4, help="RK4 steps of the RNODE model")
+    ap.add_argument("--propose-args", default="", help="arguments for flow.propose, e.g. '--no-verifier' or '--device mps'")
+    ap.add_argument("--skip-propose", action="store_true", help="use the hints.bin already in the folder (made on another machine)")
     a = ap.parse_args()
     ev = (ROOT / a.eval).resolve()
     tool = ROOT / "tracker/build-mac/trk_hint_eval"
-    cmd = [sys.executable, "-m", "flow.infer_rnode" if a.method == "rnode" else "flow.infer", "--model", a.model, "--eval", str(ev),
-           "--k", str(a.k), "--hints", str(a.hints), "--centers", str(a.centers), "--orient", str(a.orient)]
-    if a.method == "rnode":
-        cmd += ["--solver-steps", str(a.solver_steps)]
-    subprocess.run(cmd + (["--device", a.device] if a.device else []), check=True, cwd=ROOT)
+    if not a.skip_propose:
+        subprocess.run([sys.executable, "-m", "flow.propose", "--eval", str(ev)] + a.propose_args.split(), check=True, cwd=ROOT)
     if not (ev / "baseline.csv").exists():
         subprocess.run([tool, "--scenes", ev / "scenes.bin", "--out", ev / "baseline.csv"], check=True, cwd=ROOT / "tracker")
     subprocess.run([tool, "--scenes", ev / "scenes.bin", "--hints", ev / "hints.bin", "--baseline", "0", "--out", ev / "hints.csv"],

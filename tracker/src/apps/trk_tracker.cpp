@@ -2,6 +2,10 @@
 //
 //   trk_tracker [--config config/tracker.json] [--duration S] [--final-json FILE] [--quiet]
 //               [--initial-pose x,y,z,qw,qx,qy,qz]   (test option: start in track state at this pose)
+//               [--no-hints]                         (do not read the hint buffer)
+//
+// While in search state the loop takes the newest record of the hint buffer (pose hypotheses from ../flow/live.py,
+// DESIGN.md 13), if a writer exists, and gives hypotheses that are not older than hints.max_age_ms to the core.
 //
 // Threads: loop (wait for the pair notification, newest pair, stages 1-6, publish pose every cycle and cloud at
 // cloud_rate_hz), status (one line every status_interval_s), two heartbeat threads (pose and cloud buffers), main
@@ -49,6 +53,8 @@ struct Stats {
     cap::AtomicHistogram delay{0.0, 0.05, 2000};    // capture -> publish, ms, 0-100 ms
     std::atomic<uint64_t> pairs_skipped{0}, pairs_torn{0}, pairs_used{0};
     std::atomic<uint64_t> capture_published_start{0}, capture_published_now{0};
+    std::atomic<uint64_t> hint_records{0}, hint_stale{0}, hint_given{0}, hint_accepted{0}, hint_attaches{0};
+    cap::AtomicHistogram hint_age{0.0, 1.0, 2000};  // ms, age of the hypotheses when they are given to the core
 };
 
 long rss_kb() {
@@ -75,7 +81,7 @@ int main(int argc, char** argv) {
 
     std::string cfg_path = "config/tracker.json", final_json;
     double duration = 0;
-    bool quiet = false;
+    bool quiet = false, use_hints = true;
     std::vector<double> init_pose;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
@@ -83,6 +89,7 @@ int main(int argc, char** argv) {
         else if (a == "--duration" && i + 1 < argc) duration = std::atof(argv[++i]);
         else if (a == "--final-json" && i + 1 < argc) final_json = argv[++i];
         else if (a == "--quiet") quiet = true;
+        else if (a == "--no-hints") use_hints = false;
         else if (a == "--initial-pose" && i + 1 < argc) init_pose = parse_list(argv[++i]);
         else { std::fprintf(stderr, "usage: %s [--config FILE] [--duration S] [--final-json FILE] [--quiet] [--initial-pose x,y,z,qw,qx,qy,qz]\n", argv[0]); return 2; }
     }
@@ -112,6 +119,9 @@ int main(int argc, char** argv) {
     std::vector<uint16_t> imgA(std::size_t(cap::kWidth) * cap::kHeight), imgB(imgA.size());
     uint16_t* img[2] = {imgA.data(), imgB.data()};
     std::unique_ptr<PoseRecord> pose(new PoseRecord());
+    std::unique_ptr<HintRecord> hint(new HintRecord());
+    use_hints = use_hints && !cfg.hint_buffer.empty();
+    std::printf("hints: %s\n", use_hints ? (cfg.hint_buffer + ", used in search state, at most " + std::to_string(int(cfg.hint_max_age_ms)) + " ms old").c_str() : "off");
     std::unique_ptr<CloudRecord> cloud(new CloudRecord());
     std::memset(cloud.get(), 0, sizeof(CloudRecord));
     Stats st;
@@ -125,6 +135,8 @@ int main(int argc, char** argv) {
         const int64_t cloud_period = int64_t(1e9 / std::max(0.1, cfg.cloud_rate_hz));
         uint64_t pose_seq = 0;
         float publish_us = 0;
+        std::unique_ptr<RingReader> hint_r;
+        int64_t hint_attach_ns = 0;
         while (!g_stop.load(std::memory_order_relaxed)) {
             if (!attached) {
                 std::string e;
@@ -144,6 +156,37 @@ int main(int argc, char** argv) {
                 st.capture_published_start.store(src.header().pairs_published.load());
                 std::printf("[attach +%.1fs] pair buffer %s writer instance %016" PRIx64 ": %s\n",
                             double(mono_ns() - t_start) / 1e9, cfg.pair_buffer.c_str(), src.instance_id(), n.c_str());
+            }
+            if (use_hints && core->state() == kStateSearch) {
+                // the newest hypotheses, if a writer exists (attach attempts at most twice per second, in search only)
+                const int64_t now = mono_ns();
+                if (!hint_r && now - hint_attach_ns >= 500000000) {
+                    std::string e;
+                    hint_attach_ns = now;
+                    hint_r = RingReader::attach(cfg.hint_buffer, kHintRecordType, kHintRecordVersion, sizeof(HintRecord), e);
+                    if (hint_r) st.hint_attaches.fetch_add(1, std::memory_order_relaxed);
+                }
+                if (hint_r) {
+                    const RingReader::Result hr = hint_r->latest(hint.get());
+                    if (hr == RingReader::Result::Ok) {
+                        st.hint_records.fetch_add(1, std::memory_order_relaxed);
+                        const double age_ms = double(now - hint->meas_time_mono_ns) / 1e6;
+                        const uint32_t n = std::min<uint32_t>(hint->count, kHintMax);
+                        if (hint->version != kHintRecordVersion || age_ms > cfg.hint_max_age_ms || age_ms < 0) {
+                            st.hint_stale.fetch_add(1, std::memory_order_relaxed);
+                        } else if (n > 0) {
+                            Mat4 T[kHintMax];
+                            for (uint32_t k = 0; k < n; k++)
+                                for (int i = 0; i < 16; i++) T[k](i / 4, i % 4) = hint->T_rig_from_object[k][i];
+                            core->set_hints(T, int(n));
+                            st.hint_given.fetch_add(1, std::memory_order_relaxed);
+                            st.hint_age.add(age_ms);
+                        }
+                    } else if (hr != RingReader::Result::Timeout) {
+                        hint_r.reset();   // writer stopped, not alive or replaced: attach again later
+                        hint_attach_ns = now;
+                    }
+                }
             }
             CropRect crops[2];
             core->crops(crops);
@@ -180,6 +223,7 @@ int main(int argc, char** argv) {
             // statistics (atomics only)
             st.cycles.fetch_add(1, std::memory_order_relaxed);
             if (pose->valid) st.valid.fetch_add(1, std::memory_order_relaxed);
+            if (pose->by_hint) st.hint_accepted.fetch_add(1, std::memory_order_relaxed);
             st.state_count[pose->track_state].fetch_add(1, std::memory_order_relaxed);
             st.state.store(pose->track_state, std::memory_order_relaxed);
             st.last_pose_seq.store(pose->pose_seq, std::memory_order_relaxed);
@@ -227,14 +271,16 @@ int main(int argc, char** argv) {
             if (!quiet)
                 std::printf("[status +%.0fs] state=%s rate=%.1fHz valid=%.1f%% pts=%u rmse=%.2fmm inl=%.3f | cycle p50/p99=%.2f/%.2fms "
                             "solve p50/p99=%.2f/%.2fms read p99=%.2fms delay p50/p99=%.1f/%.1fms | pairs used=%" PRIu64
-                            " skipped=%" PRIu64 " torn=%" PRIu64 " attaches=%" PRIu64 " rss=%ldkB\n",
+                            " skipped=%" PRIu64 " torn=%" PRIu64 " attaches=%" PRIu64 " rss=%ldkB | hints records=%" PRIu64
+                            " stale=%" PRIu64 " given=%" PRIu64 " accepted=%" PRIu64 "\n",
                             double(now - t_start) / 1e9, state_name(st.state.load()), double(cyc - cyc_prev) / secs,
                             cyc > cyc_prev ? 100.0 * double(val - valid_prev) / double(cyc - cyc_prev) : 0.0,
                             st.last_points.load(), st.last_rmse.load() * 1000, st.last_inlier.load(),
                             st.total.quantile(dt, 0.5), st.total.quantile(dt, 0.99), st.solve.quantile(ds, 0.5),
                             st.solve.quantile(ds, 0.99), st.read.quantile(dr, 0.99), st.delay.quantile(dd, 0.5),
                             st.delay.quantile(dd, 0.99), st.pairs_used.load(), st.pairs_skipped.load(), st.pairs_torn.load(),
-                            st.reattaches.load(), rss_kb());
+                            st.reattaches.load(), rss_kb(), st.hint_records.load(), st.hint_stale.load(), st.hint_given.load(),
+                            st.hint_accepted.load());
             cyc_prev = cyc;
             valid_prev = val;
         }
@@ -264,14 +310,19 @@ int main(int argc, char** argv) {
                 " pairs used=%" PRIu64 " skipped=%" PRIu64 " torn=%" PRIu64 " capture published (since attach)=%" PRIu64
                 " attaches=%" PRIu64 " clouds=%" PRIu64 "\n"
                 "       cycle p50/p99/max=%.3f/%.3f/%.3f ms <=2ms %.2f%% <=5ms %.2f%%; solve p50/p99=%.3f/%.3f ms; read p50/p99=%.3f/%.3f ms;"
-                " delay p50/p99=%.2f/%.2f ms; rss=%ld kB\n",
+                " delay p50/p99=%.2f/%.2f ms; rss=%ld kB\n"
+                "       hints: records=%" PRIu64 " stale=%" PRIu64 " given=%" PRIu64 " accepted=%" PRIu64 " attaches=%" PRIu64
+                " age p50/p99=%.0f/%.0f ms\n",
                 st.cycles.load(), st.valid.load(), st.state_count[0].load(), st.state_count[1].load(), st.state_count[2].load(),
                 st.pairs_used.load(), st.pairs_skipped.load(), st.pairs_torn.load(), cap_pub, st.reattaches.load(),
                 st.clouds.load(), st.total.quantile(tot, 0.5), st.total.quantile(tot, 0.99), st.total.max_value(tot),
                 [&] { uint64_t n = 0, a = 0; for (std::size_t i = 0; i < tot.size(); i++) { a += tot[i]; if (i <= 200) n += tot[i]; } return a ? 100.0 * double(n) / double(a) : 0.0; }(),
                 [&] { uint64_t n = 0, a = 0; for (std::size_t i = 0; i < tot.size(); i++) { a += tot[i]; if (i <= 500) n += tot[i]; } return a ? 100.0 * double(n) / double(a) : 0.0; }(),
                 st.solve.quantile(sol, 0.5), st.solve.quantile(sol, 0.99), st.read.quantile(rd, 0.5), st.read.quantile(rd, 0.99),
-                st.delay.quantile(dl, 0.5), st.delay.quantile(dl, 0.99), rss_kb());
+                st.delay.quantile(dl, 0.5), st.delay.quantile(dl, 0.99), rss_kb(), st.hint_records.load(), st.hint_stale.load(),
+                st.hint_given.load(), st.hint_accepted.load(), st.hint_attaches.load(),
+                [&] { std::vector<uint64_t> h; st.hint_age.snapshot(h); return st.hint_age.quantile(h, 0.5); }(),
+                [&] { std::vector<uint64_t> h; st.hint_age.snapshot(h); return st.hint_age.quantile(h, 0.99); }());
     if (!final_json.empty()) {
         if (FILE* f = std::fopen(final_json.c_str(), "w")) {
             uint64_t le2 = 0, le5 = 0, all = 0;
@@ -282,13 +333,15 @@ int main(int argc, char** argv) {
                          ", \"capture_published\": %" PRIu64 ", \"attaches\": %" PRIu64 ", \"clouds\": %" PRIu64
                          ", \"cycle_p50_ms\": %.4f, \"cycle_p99_ms\": %.4f, \"cycle_max_ms\": %.4f, \"cycle_le_2ms_pct\": %.3f"
                          ", \"cycle_le_5ms_pct\": %.3f, \"solve_p50_ms\": %.4f, \"solve_p99_ms\": %.4f, \"read_p99_ms\": %.4f"
-                         ", \"delay_p50_ms\": %.3f, \"delay_p99_ms\": %.3f, \"rss_kb\": %ld, \"pose_instance\": \"%016" PRIx64 "\"}\n",
+                         ", \"delay_p50_ms\": %.3f, \"delay_p99_ms\": %.3f, \"rss_kb\": %ld, \"pose_instance\": \"%016" PRIx64 "\""
+                         ", \"hint_records\": %" PRIu64 ", \"hint_stale\": %" PRIu64 ", \"hint_given\": %" PRIu64 ", \"hint_accepted\": %" PRIu64 "}\n",
                          run_s, st.cycles.load(), st.valid.load(), st.state_count[0].load(), st.state_count[1].load(),
                          st.state_count[2].load(), st.pairs_used.load(), st.pairs_skipped.load(), st.pairs_torn.load(), cap_pub,
                          st.reattaches.load(), st.clouds.load(), st.total.quantile(tot, 0.5), st.total.quantile(tot, 0.99),
                          st.total.max_value(tot), all ? 100.0 * double(le2) / double(all) : 0.0, all ? 100.0 * double(le5) / double(all) : 0.0,
                          st.solve.quantile(sol, 0.5), st.solve.quantile(sol, 0.99), st.read.quantile(rd, 0.99),
-                         st.delay.quantile(dl, 0.5), st.delay.quantile(dl, 0.99), rss_kb(), pose_w->instance_id());
+                         st.delay.quantile(dl, 0.5), st.delay.quantile(dl, 0.99), rss_kb(), pose_w->instance_id(),
+                         st.hint_records.load(), st.hint_stale.load(), st.hint_given.load(), st.hint_accepted.load());
             // quantiles of an empty histogram are NaN (no cycle); JSON has no NaN: written as null
             std::string out(js);
             for (const char* bad : {"-nan", "nan"})

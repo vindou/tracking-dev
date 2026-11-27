@@ -84,6 +84,8 @@ bool load_tracker_config(const std::string& path, TrackerConfig& c, std::string&
     inum(icp, "max_iterations", c.max_iterations);
     num(icp, "relative_fitness", c.rel_fitness);
     num(icp, "relative_rmse", c.rel_rmse);
+    str(icp, "correspondence_search", c.corr_search);
+    num(icp, "table_cell_m", c.table_cell);
     const Json& fc = j["fit_check"];
     inum(fc, "min_points", c.min_points);
     num(fc, "max_rmse_m", c.max_rmse);
@@ -110,6 +112,10 @@ bool load_tracker_config(const std::string& path, TrackerConfig& c, std::string&
     if (st["search_early_accept"].type() == Json::Bool) c.search_early_accept = st["search_early_accept"].boolean();
     num(st, "early_accept_min_fitness", c.early_min_fitness);
     num(st, "early_accept_max_violation", c.early_max_violation);
+    const Json& hi = j["hints"];
+    str(hi, "buffer", c.hint_buffer);
+    num(hi, "max_age_ms", c.hint_max_age_ms);
+    inum(hi, "threads", c.hint_threads);
     num(j, "cloud_rate_hz", c.cloud_rate_hz);
     if (j["cloud_content"].type() == Json::String) c.cloud_scene = j["cloud_content"].str() != "solver";
     const Json& br = j["bridge"];
@@ -118,6 +124,10 @@ bool load_tracker_config(const std::string& path, TrackerConfig& c, std::string&
     if (br["queue_bytes"].type() == Json::Number) c.bridge_queue_bytes = long(br["queue_bytes"].num());
     num(br, "status_interval_s", c.bridge_status_s);
     num(j, "status_interval_s", c.status_interval_s);
+    if (c.corr_search != "kdtree" && c.corr_search != "bounded" && c.corr_search != "table" && c.corr_search != "table_exact") {
+        err = path + ": icp.correspondence_search must be kdtree, bounded, table_exact or table";
+        return false;
+    }
     if (c.kernel != "tukey" && c.kernel != "l2") { err = path + ": icp.kernel must be tukey or l2"; return false; }
     if (c.distances.empty() || c.distances.size() > 8) { err = path + ": icp.distances_m needs 1 to 8 values"; return false; }
     return true;

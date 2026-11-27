@@ -20,6 +20,7 @@
 #include <Eigen/Core>
 #include <vector>
 
+#include "ClosestTable.h"
 #include "Eigen.h"
 #include "KDTreeFlann.h"
 #include "PointCloud.h"
@@ -35,11 +36,20 @@ struct ICPWorkspace {
     std::vector<Eigen::Vector3d> pcd;         ///< source transformed by the current estimate
     std::vector<Eigen::Vector2i> corres;      ///< correspondence set (source index, target index)
     std::vector<uint8_t> inlier;              ///< per source point: 1 if it has a correspondence (last evaluation)
+    /// Tracker extension: how the correspondences are found. kKDTree is the port (SearchHybrid1). kBounded gives the
+    /// same correspondences from a search bounded by the radius and the previous correspondence (see
+    /// KDTreeFlann::SearchBounded1). kTable takes them from a ClosestTable (table must be set; may differ slightly).
+    /// kTableExact: from the exact form of the table (the same correspondences as the tree).
+    enum Search { kKDTree = 0, kBounded = 1, kTable = 2, kTableExact = 3 };
+    int search = kKDTree;
+    const geometry::ClosestTable *table = nullptr;
+    std::vector<int> prev;                    ///< kBounded: correspondence of each source point in the last evaluation, -1: none
     /// Allocates and writes the arrays once (resident from the start; the capacity stays after clear()).
     void Reserve(std::size_t max_points) {
         pcd.assign(max_points, Eigen::Vector3d::Zero());
         corres.assign(max_points, Eigen::Vector2i::Zero());
         inlier.assign(max_points, 0);
+        prev.assign(max_points, -1);
         pcd.clear();
         corres.clear();
         inlier.clear();
