@@ -216,7 +216,7 @@ def main():
     ap.add_argument("--view-distance", type=float, default=1.0, help="camera distance factor of the automatic view")
     ap.add_argument("--centers", type=int, default=4)
     ap.add_argument("--orient", type=int, default=32)
-    ap.add_argument("--solver-steps", type=int, default=4)
+    ap.add_argument("--solver-steps", type=int, default=propose.SOLVER_STEPS)
     ap.add_argument("--show", default=FILTERS[1], choices=FILTERS, help="the selection of scenes shown first")
     ap.add_argument("--speed", default="1/5 of real time", choices=tuple(SPEEDS))
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")

@@ -3,6 +3,8 @@
 //
 //   trk_flow --config ~/tracker/config/tracker.json --engines DIR [--tag fp16] [--always] [--status 10]      live
 //   trk_flow --config ... --engines DIR --scenes scenes.bin --out hints.bin [--limit N]                       a scenes file
+//            [--step K] [--gap-ms G] [--probe]     every K-th scene, a pause after each, and per scene the GPU and
+//                                                  CPU clock and the core before and after (flow/jetson_contention.sh)
 //
 // Live: while the tracker is in search state (newest pose record; --always: regardless of the tracker), take the
 // newest pair, compute the hypotheses and publish up to 16, best first, with the capture time of the pair. The
@@ -36,6 +38,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <sched.h>
 
 #include <NvInfer.h>
 #include <cuda_runtime.h>
@@ -119,7 +123,7 @@ struct Hints {
     int count = 0, hypotheses = 0;
     double T[NHINT][16];
     float score[NHINT];
-    double prep_ms = 0, net_ms = 0, post_ms = 0;
+    double prep_ms = 0, net_ms = 0, post_ms = 0, net1_ms = 0;   // net1: the position stage, part of net
 };
 
 class Proposer {
@@ -314,6 +318,7 @@ public:
         const double t5 = now_ms();
         out.prep_ms = (t1 - t0) + (t3 - t2);
         out.net_ms = (t2 - t1) + (t4 - t3);
+        out.net1_ms = t2 - t1;
         out.post_ms = t5 - t4;
     }
 
@@ -412,6 +417,29 @@ private:
     std::normal_distribution<float> gauss_{0.0f, 1.0f};
 };
 
+long read_long(const char* path) {
+    long v = -1;
+    if (FILE* f = std::fopen(path, "r")) {
+        if (std::fscanf(f, "%ld", &v) != 1) v = -1;
+        std::fclose(f);
+    }
+    return v;
+}
+// Diagnostics of the scenes mode (--probe): the GPU clock (Hz), the core this thread is on and that core's clock (kHz).
+struct Probe {
+    long gpu_hz, cpu_khz;
+    int core;
+    static Probe now() {
+        Probe p;
+        p.core = sched_getcpu();
+        char path[96];
+        std::snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", p.core);
+        p.cpu_khz = read_long(path);
+        p.gpu_hz = read_long("/sys/class/devfreq/17000000.gpu/cur_freq");
+        return p;
+    }
+};
+
 double quantile(std::vector<double> v, double q) {
     if (v.empty()) return 0;
     std::sort(v.begin(), v.end());
@@ -423,12 +451,14 @@ double quantile(std::vector<double> v, double q) {
 int main(int argc, char** argv) {
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
     std::string config = "/home/gchang/tracker/config/tracker.json", engines = ".", tag = "fp16", scenes, out = "hints.bin";
-    bool always = false;
+    bool always = false, probe = false;
+    long step = 1, gap_ms = 0;
     double status_s = 10;
     long limit = 0;
     for (int i = 1; i < argc; i++) {
         const std::string a = argv[i];
         if (a == "--always") always = true;
+        else if (a == "--probe") probe = true;
         else if (i + 1 >= argc) { std::fprintf(stderr, "option %s needs a value\n", a.c_str()); return 2; }
         else if (a == "--config") config = argv[++i];
         else if (a == "--engines") engines = argv[++i];
@@ -437,6 +467,8 @@ int main(int argc, char** argv) {
         else if (a == "--scenes") scenes = argv[++i];
         else if (a == "--out") out = argv[++i];
         else if (a == "--limit") limit = std::atol(argv[++i]);
+        else if (a == "--step") step = std::max(1L, std::atol(argv[++i]));
+        else if (a == "--gap-ms") gap_ms = std::atol(argv[++i]);
         else { std::fprintf(stderr, "usage: %s --config FILE --engines DIR [--tag fp16] [--always] [--status S] [--scenes FILE --out FILE [--limit N]]\n", argv[0]); return 2; }
     }
     char err[512] = "";
@@ -466,17 +498,22 @@ int main(int argc, char** argv) {
         FILE* fo = std::fopen(out.c_str(), "wb");
         FILE* ft = std::fopen((out + ".times.csv").c_str(), "w");
         if (!fo || !ft) { std::fprintf(stderr, "error: cannot write %s\n", out.c_str()); return 3; }
-        const uint32_t head[3] = {1, count, NHINT};
+        const uint32_t head[3] = {1, uint32_t((count + step - 1) / step), NHINT};
         std::fwrite("TRKHINTS", 1, 8, fo);
         std::fwrite(head, 4, 3, fo);
-        std::fprintf(ft, "scene,cloud_ms,prep_ms,net_ms,post_ms,points,hints\n");
+        std::fprintf(ft, "scene,cloud_ms,prep_ms,net_ms,post_ms,points,hints%s\n", probe ? ",net1_ms,gpu_hz_before,gpu_hz_after,core_before,core_after,cpu_khz_before,cpu_khz_after" : "");
         std::vector<double> total;
         for (uint32_t s = 0; s < count; s++) {
             double truth[16];
+            if (s % step != 0) {
+                std::fseek(fs, long(128 + 4 * n), SEEK_CUR);
+                continue;
+            }
             if (std::fread(truth, 8, 16, fs) != 16 || std::fread(a.data(), 2, n, fs) != n || std::fread(b.data(), 2, n, fs) != n) {
                 std::fprintf(stderr, "error: %s: short file at scene %u\n", scenes.c_str(), s);
                 return 3;
             }
+            const Probe pb = probe ? Probe::now() : Probe();
             const double t0 = now_ms();
             const int np = fio_cloud(fio, a.data(), b.data(), STRIDE, P.data(), C.data(), MAX_CLOUD);
             const double t_cloud = now_ms() - t0;
@@ -485,12 +522,18 @@ int main(int argc, char** argv) {
             double zero[16] = {0};
             std::fwrite(&nh, 4, 1, fo);
             for (int k = 0; k < NHINT; k++) std::fwrite(k < hints->count ? hints->T[k] : zero, 8, 16, fo);
-            std::fprintf(ft, "%u,%.3f,%.3f,%.3f,%.3f,%d,%d\n", s, t_cloud, hints->prep_ms, hints->net_ms, hints->post_ms, np, hints->count);
+            std::fprintf(ft, "%u,%.3f,%.3f,%.3f,%.3f,%d,%d", s, t_cloud, hints->prep_ms, hints->net_ms, hints->post_ms, np, hints->count);
+            if (probe) {
+                const Probe pa = Probe::now();
+                std::fprintf(ft, ",%.3f,%ld,%ld,%d,%d,%ld,%ld", hints->net1_ms, pb.gpu_hz, pa.gpu_hz, pb.core, pa.core, pb.cpu_khz, pa.cpu_khz);
+            }
+            std::fprintf(ft, "\n");
+            if (gap_ms > 0) std::this_thread::sleep_for(std::chrono::milliseconds(gap_ms));
             total.push_back(t_cloud + hints->prep_ms + hints->net_ms + hints->post_ms);
         }
         std::fclose(fo);
         std::fclose(ft);
-        std::printf("%u scenes -> %s; ms per scene: median %.1f, p90 %.1f, max %.1f\n", count, out.c_str(), quantile(total, 0.5),
+        std::printf("%zu scenes -> %s; ms per scene: median %.1f, p90 %.1f, max %.1f\n", total.size(), out.c_str(), quantile(total, 0.5),
                     quantile(total, 0.9), quantile(total, 1.0));
         fio_close(fio);
         return 0;

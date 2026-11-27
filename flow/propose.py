@@ -27,10 +27,11 @@ from .make_data import MAX_PTS, STORE_RADIUS, load_eval
 ROOT = Path(__file__).resolve().parents[1]
 MODEL, VERIFIER, TABLE = "flow/runs/flow/model.pt", "flow/runs/verifier/model.pt", "flow/data/table.npy"
 MIN_SCORE = 0.85
-# The solver of the deployed configuration: Euler, 4 steps in the position stage and 4 in the pose stage (9
-# evaluations with the object logits). Through the tracker it equals 4 Runge-Kutta steps in both (33 evaluations),
-# and so do 8, 6, 5 and 3 Euler steps in the pose stage (flow/README.md).
-SOLVER, SOLVER_STEPS, STAGE1_STEPS = "euler", 4, 4
+# The solver of the deployed configuration: Euler, 4 steps in the position stage and 2 in the pose stage (7
+# evaluations with the object logits). In PyTorch, through the tracker, 2 pose steps equal 4 Runge-Kutta steps in both
+# stages (33 evaluations) and 8, 6, 5, 4 and 3 Euler steps; through the Jetson engines they give fewer wrong poses
+# and more scenes without one than 4 (flow/README.md).
+SOLVER, SOLVER_STEPS, STAGE1_STEPS = "euler", 2, 4
 
 
 def seeds_fps(P, k, rng, voxel=0.03, min_pts=4):
@@ -138,7 +139,7 @@ def race_solve(net, table, X, c, q, steps, schedule, score="inlier", verifier=No
 @torch.no_grad()
 def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_steps=SOLVER_STEPS, seed=0, trajectory=False,
             verifier=None, min_score=MIN_SCORE, solver=SOLVER, stage1_steps=STAGE1_STEPS, engine=None, race=None, race_score="inlier", step_power=1.0, prior=None,
-            center_shift=None, dedup=None):
+            center_shift=None, dedup=None, pose_solve=None):
     """Depth pair -> hypotheses. Dictionary: q, p (centroid, rig frame), T (4x4 rig-from-object) of the K hypotheses
     (refined, if there is a verifier), score (verifier, or None), objfrac (share of points the network calls
     object), groups (see group()), seeds, seed_end, centers, timings, and with trajectory = True the states of the
@@ -147,7 +148,8 @@ def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_st
     (a position, rig frame: the position stage is skipped and this is the only position, e.g. the tracker's last
     pose); center_shift (a vector added to the positions of the position stage: positions kept from an earlier
     proposal after the object moved); dedup (mm and degrees: after the refinement, hypotheses within this of an
-    earlier one are not scored); race (race_solve).
+    earlier one are not scored); race (race_solve); pose_solve (a function (pts, cam, q) -> q, p that replaces the
+    solve of the pose stage: flow/fewstep.py).
     With an engine the networks are not run here: engine.stage1(pts, cam, q) -> q, p, seg and
     engine.stage2(pts [centres, N, 3], cam, rep, q) -> refined q, p and scores (flow/trt_eval.py: TensorRT on the
     Jetson); objfrac of the hypotheses is then zero."""
@@ -205,7 +207,10 @@ def propose(net, table, rig, depth, dev, k=32, centers=4, n_orient=32, solver_st
         qe, pe, score = engine.stage2(X, c, rep, qb)
         of, trajectory = np.zeros(K), False
     else:
-        if race:        # racing over the hypotheses during the solve: the losers are dropped (rep, K: the survivors)
+        if pose_solve is not None:
+            qe, pe = pose_solve(X[rep], c[rep], qb)
+            out["evals"], trajectory = solver_steps * K, False
+        elif race:        # racing over the hypotheses during the solve: the losers are dropped (rep, K: the survivors)
             qe, pe, alive, out["evals"] = race_solve(net, table, X[rep], c[rep], qb, solver_steps, race, race_score, verifier)
             rep, trajectory = rep[alive.cpu().numpy()], False
             K = len(rep)
@@ -330,6 +335,7 @@ def main():
     ap.add_argument("--prior-offset", type=float, default=-1.0, help="mm: skip the position stage; the only position is the true one moved by this much in a random direction")
     ap.add_argument("--center-shift", type=float, default=0.0, help="mm: move the positions of the position stage by this much in a random direction")
     ap.add_argument("--dedup", type=float, default=0.0, help="mm and degrees: score one of every set of refined hypotheses that agree within this")
+    ap.add_argument("--pose-run", default="", help="a checkpoint of flow.fewstep for the pose stage (with --solver-steps)")
     ap.add_argument("--dump", action="store_true", help="also write <eval>/hyp.pkl: all hypotheses and their flow states (flow.simulate)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     a = ap.parse_args()
@@ -337,6 +343,11 @@ def main():
     net, ver, table = load(dev, a.model, "" if a.no_verifier else a.verifier, a.table)
     if a.act:
         model.set_activation(net, a.act)
+    pose_solve = None
+    if a.pose_run:
+        from . import fewstep
+        pose_solve, name = fewstep.load_pose(ROOT / a.pose_run, net, table, dev, a.solver_steps)
+        print("pose stage:", name, flush=True)
     rig = scene.Rig()
     dump = [] if a.dump else None
     stats = {"evals": [], "scored": []}
@@ -358,7 +369,7 @@ def main():
                     solver_steps=a.solver_steps, seed=i, verifier=ver, min_score=a.min_score,
                     solver=a.solver, stage1_steps=a.stage1_steps or None, trajectory=a.dump,
                     race=[tuple(int(v) for v in s.split(":")) for s in a.race.split(",")] if a.race else None,
-                    race_score=a.race_score, step_power=a.step_power, dedup=a.dedup or None, **extra(i))
+                    race_score=a.race_score, step_power=a.step_power, dedup=a.dedup or None, pose_solve=pose_solve, **extra(i))
         for k in stats:
             stats[k].append(h.get(k, 0))
         return h
